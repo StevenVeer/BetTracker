@@ -1,0 +1,358 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --chalk: #f4f2e8; --gold: #e8b23d; --gold-soft: #f2c463;
+      --ink: #0a1210; --win: #269c5b; --win-text: #63d38e; --loss: #be383d; --loss-text: #ed777b;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    a { color: var(--gold); }
+    a:hover { color: var(--gold-soft); }
+    .app {
+      width: 1400px;
+      background: radial-gradient(circle at 50% -10%, #163f30, #081714 65%);
+      font-family: 'Oswald', sans-serif; color: var(--chalk);
+      padding: 40px 20px 60px;
+    }
+    .mono { font-family: 'Space Mono', monospace; font-variant-numeric: tabular-nums; }
+    .muted { color: rgba(244,242,232,0.5); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+    /* switch boven de titel — exacte kopie van .filters/.filter-tab */
+    .filters { display: flex; gap: 4px; background: rgba(10,18,16,0.55); border: 1px solid rgba(232,178,61,0.25); border-radius: 10px; padding: 4px; width: fit-content; margin-bottom: 24px; }
+    .filter-tab { border: none; background: transparent; padding: 8px 16px; border-radius: 7px; font-family: 'Oswald', sans-serif; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; color: rgba(244,242,232,0.55); }
+    .filter-tab.is-active { background: rgba(232,178,61,0.16); color: var(--gold); font-weight: 600; }
+
+    /* overzicht — exacte kopie van .bookmaker-* uit styles.css */
+    .bookmaker-hero { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 24px; }
+    .bookmaker-hero h3 { margin: 0; font-size: 24px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--chalk); }
+    .bookmaker-hero-stat { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+    .bookmaker-hero-stat strong { font-family: 'Space Mono', monospace; font-size: 40px; font-weight: 700; color: var(--gold); }
+    .bookmaker-hero-stat strong.amount-credit { color: var(--win-text); }
+    .bookmaker-hero-stat strong.amount-debit { color: var(--loss-text); }
+    .bookmaker-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .bookmaker-card { background: rgba(10,18,16,0.55); border: 1px solid rgba(232,178,61,0.22); border-radius: 16px; padding: 26px; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; }
+    .bookmaker-card:hover { border-color: var(--gold); background: rgba(232,178,61,0.06); }
+    .bookmaker-card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; gap: 10px; }
+    .bookmaker-name { display: inline-flex; align-items: center; gap: 9px; font-size: 19px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--chalk); }
+    .today-chip { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--gold); color: var(--gold); }
+    .bookmaker-open-chip { flex-shrink: 0; font-family: 'Oswald', sans-serif; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 11px; border-radius: 999px; border: 1px solid rgba(232,178,61,0.4); color: var(--gold); white-space: nowrap; }
+    .bookmaker-balance { font-family: 'Space Mono', monospace; font-size: 38px; font-weight: 700; color: var(--chalk); margin: 0 0 14px; }
+    .bookmaker-balance.amount-credit { color: var(--win-text); }
+    .bookmaker-balance.amount-debit { color: var(--loss-text); }
+    .day-card-foot { display: flex; justify-content: space-between; font-family: 'Space Mono', monospace; font-size: 11.5px; color: rgba(244,242,232,0.55); }
+
+    /* detail (dag / bookmaker) — exacte kopie van .bookmaker-ledger e.a. */
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
+    .card-header h3 { margin: 0; font-size: 22px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--gold); }
+    .btn { border: 1px solid rgba(244,242,232,0.25); background: transparent; border-radius: 8px; padding: 10px 16px; font-family: 'Oswald', sans-serif; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--chalk); cursor: pointer; }
+    .btn-ghost { background: transparent; border-color: transparent; color: rgba(244,242,232,0.55); }
+    .ledger-balance { display: flex; flex-direction: column; gap: 4px; margin-bottom: 18px; }
+    .ledger-balance strong { font-family: 'Space Mono', monospace; font-size: 38px; color: var(--gold); }
+    .ledger-balance strong.amount-credit { color: var(--win-text); }
+    .ledger-balance strong.amount-debit { color: var(--loss-text); }
+    .table-wrap { overflow-x: auto; }
+    .ledger-table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+    .ledger-table th { text-align: left; padding: 10px 14px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(244,242,232,0.45); border-bottom: 1px solid rgba(244,242,232,0.15); }
+    .ledger-table td { padding: 12px 14px; border-bottom: 1px dashed rgba(244,242,232,0.1); font-family: 'Space Mono', monospace; color: var(--chalk); white-space: nowrap; }
+    .ledger-table tr:last-child td { border-bottom: none; }
+    .amount-positive { color: var(--win-text); }
+    .amount-negative { color: var(--loss-text); }
+    .status-badge { font-family: 'Oswald', sans-serif; font-size: 9.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap; }
+    .status-won { background: rgba(37,156,91,0.14); border-color: var(--win); color: var(--win-text); }
+    .status-lost { background: rgba(190,56,61,0.14); border-color: var(--loss); color: var(--loss-text); }
+    .status-void, .status-cashed_out { background: rgba(244,242,232,0.06); border-color: rgba(244,242,232,0.3); color: rgba(244,242,232,0.75); }
+  </style>
+</helmet>
+
+<div class="app">
+  <nav class="filters">
+    <button class="filter-tab {{tabs.bookmakersClass}}" onClick="{{tabs.toBookmakers}}">Bookmakers</button>
+    <button class="filter-tab {{tabs.perDagClass}}" onClick="{{tabs.toPerDag}}">Per dag</button>
+  </nav>
+
+  <sc-if value="{{isPerDag}}" hint-placeholder-val="{{true}}">
+    <sc-if value="{{day.hasSelection}}" hint-placeholder-val="{{false}}">
+      <div class="bookmaker-ledger">
+        <div class="card-header">
+          <h3>{{day.selected.dateLabel}}</h3>
+          <button type="button" class="btn btn-ghost" onClick="{{day.back}}">← Terug naar overzicht</button>
+        </div>
+        <div class="ledger-balance">
+          <span class="muted">Resultaat</span>
+          <strong class="{{day.selected.resultClass}}">{{day.selected.resultFmt}}</strong>
+        </div>
+        <div class="table-wrap">
+          <table class="ledger-table">
+            <thead><tr><th>Selectie</th><th>Bookmaker</th><th>Inzet @ odds</th><th>Status</th><th>Resultaat</th></tr></thead>
+            <tbody>
+              <sc-for list="{{day.selected.bets}}" as="bet" hint-placeholder-count="2">
+                <tr>
+                  <td>{{bet.label}}</td>
+                  <td>{{bet.bookmaker}}</td>
+                  <td>€ {{bet.stakeFmt}} @ {{bet.oddsFmt}}</td>
+                  <td><span class="status-badge status-{{bet.status}}">{{bet.statusLabel}}</span></td>
+                  <td class="{{bet.amountClass}}">{{bet.amountFmt}}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{day.noSelection}}" hint-placeholder-val="{{true}}">
+      <div class="bookmaker-overview">
+        <div class="bookmaker-hero">
+          <h3>Overzicht per dag</h3>
+          <div class="bookmaker-hero-stat">
+            <span class="muted">Resultaat totaal</span>
+            <strong class="mono {{day.totals.resultClass}}">{{day.totals.resultFmt}}</strong>
+          </div>
+        </div>
+        <div class="bookmaker-cards">
+          <sc-for list="{{day.cards}}" as="d" hint-placeholder-count="6">
+            <div class="bookmaker-card" onClick="{{d.select}}">
+              <div class="bookmaker-card-top">
+                <span class="bookmaker-name">
+                  {{d.dateLabel}}
+                  <sc-if value="{{d.isToday}}" hint-placeholder-val="{{false}}"><span class="today-chip">Vandaag</span></sc-if>
+                </span>
+                <span class="bookmaker-open-chip">{{d.betCount}} bets</span>
+              </div>
+              <p class="bookmaker-balance mono {{d.resultClass}}">{{d.resultFmt}}</p>
+              <div class="day-card-foot">
+                <span>Ingezet € {{d.stakedFmt}}</span>
+                <span>Cumulatief {{d.cumFmt}}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+  </sc-if>
+
+  <sc-if value="{{isBookmakers}}" hint-placeholder-val="{{false}}">
+    <sc-if value="{{bookmaker.hasSelection}}" hint-placeholder-val="{{false}}">
+      <div class="bookmaker-ledger">
+        <div class="card-header">
+          <h3>{{bookmaker.selected.name}}</h3>
+          <button type="button" class="btn btn-ghost" onClick="{{bookmaker.back}}">← Terug naar overzicht</button>
+        </div>
+        <div class="ledger-balance">
+          <span class="muted">Huidig saldo</span>
+          <strong>€ {{bookmaker.selected.saldoFmt}}</strong>
+        </div>
+        <div class="table-wrap">
+          <table class="ledger-table">
+            <thead><tr><th>Datum</th><th>Type</th><th>Bedrag</th><th>Saldo</th></tr></thead>
+            <tbody>
+              <sc-for list="{{bookmaker.selected.journal}}" as="row" hint-placeholder-count="3">
+                <tr>
+                  <td>14-09-2026</td>
+                  <td>{{row.label}}</td>
+                  <td class="{{row.amountClass}}">{{row.amountFmt}}</td>
+                  <td>€ {{row.balanceFmt}}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{bookmaker.noSelection}}" hint-placeholder-val="{{true}}">
+      <div class="bookmaker-overview">
+        <div class="bookmaker-hero">
+          <h3>Overzicht per bookmaker</h3>
+          <div class="bookmaker-hero-stat">
+            <span class="muted">Totaal saldo</span>
+            <strong class="mono">€ {{bookmaker.totalFmt}}</strong>
+          </div>
+        </div>
+        <div class="bookmaker-cards">
+          <sc-for list="{{bookmaker.cards}}" as="b" hint-placeholder-count="6">
+            <div class="bookmaker-card" onClick="{{b.select}}">
+              <div class="bookmaker-card-top">
+                <span class="bookmaker-name">{{b.name}}</span>
+                <span class="bookmaker-open-chip">{{b.openLabel}}</span>
+              </div>
+              <p class="bookmaker-balance mono">€ {{b.saldoFmt}}</p>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+  </sc-if>
+</div>
+</x-dc>
+<script data-dc-script>
+const STATUS_LABELS = { won: 'Gewonnen', lost: 'Verloren', void: 'Void', cashed_out: 'Cashed out' };
+
+// oplopend (oud -> nieuw), zodat het cumulatieve resultaat kloppend opgebouwd wordt
+const RAW_DAYS = [
+  { id: 'd1', date: '2026-09-02', bets: [
+    { label: 'PSV – Feyenoord · Team wint', bookmaker: 'Toto', stake: 50, odds: 2.10, status: 'lost' },
+    { label: 'Ajax – AZ · Over/Under 2.5', bookmaker: 'Bet365', stake: 50, odds: 1.85, status: 'lost' },
+    { label: 'Combi (3 selecties)', bookmaker: 'BetCity', stake: 50, odds: 4.20, status: 'lost' },
+  ]},
+  { id: 'd2', date: '2026-09-06', bets: [
+    { label: 'Man City – Arsenal · Dubbelkans', bookmaker: 'Bet365', stake: 30, odds: 1.45, status: 'won' },
+    { label: 'Twente – Utrecht · Team wint', bookmaker: 'BetCity', stake: 50, odds: 1.95, status: 'lost' },
+  ]},
+  { id: 'd3', date: '2026-09-09', bets: [
+    { label: 'Combi (3 selecties)', bookmaker: '711', stake: 100, odds: 2.65, status: 'won' },
+  ]},
+  { id: 'd4', date: '2026-09-11', bets: [
+    { label: 'Liverpool – Chelsea · BTTS', bookmaker: 'Bet365', stake: 40, odds: 1.90, status: 'won' },
+    { label: 'Combi (4 selecties)', bookmaker: 'Toto', stake: 60, odds: 3.10, status: 'won' },
+    { label: 'Real Madrid – Betis · Handicap', bookmaker: 'BetCity', stake: 50, odds: 1.80, status: 'lost' },
+    { label: 'Sparta – Go Ahead · Team wint', bookmaker: 'Unibet', stake: 35, odds: 2.30, status: 'lost' },
+  ]},
+  { id: 'd5', date: '2026-09-13', bets: [
+    { label: 'Napoli – Milan · Over/Under 2.5', bookmaker: 'BetMGM', stake: 50, odds: 1.75, status: 'void' },
+    { label: 'Feyenoord – NEC · Dubbelkans', bookmaker: 'Toto', stake: 45, odds: 1.40, status: 'lost' },
+  ]},
+  { id: 'd6', date: '2026-09-14', bets: [
+    { label: 'AZ – Ajax · Team wint', bookmaker: 'BetCity', stake: 25, odds: 2.20, status: 'won' },
+  ]},
+];
+const TODAY = '2026-09-14';
+
+const RAW_BOOKMAKERS = [
+  { id: 'bet365', name: 'Bet365', saldo: 210.40, openBets: 0, journal: [
+    { label: 'Winst — Ajax wint', amount: 210.40, balance: 210.40 },
+    { label: 'Ingezet — Ajax wint', amount: -100.00, balance: 0.00 },
+    { label: 'Gestort', amount: 100.00, balance: 100.00 },
+  ]},
+  { id: 'betcity', name: 'BetCity', saldo: 39.37, openBets: 1, journal: [
+    { label: 'Ingezet — Combi (3 selecties)', amount: -60.63, balance: 39.37 },
+    { label: 'Gestort', amount: 100.00, balance: 100.00 },
+  ]},
+  { id: 'toto', name: 'Toto', saldo: 0.00, openBets: 1, journal: [
+    { label: 'Ingezet — Combi (5 selecties)', amount: -100.00, balance: 0.00 },
+    { label: 'Gestort', amount: 100.00, balance: 100.00 },
+  ]},
+  { id: 'unibet', name: 'Unibet', saldo: 0.00, openBets: 0, journal: [] },
+  { id: '711', name: '711', saldo: 175.52, openBets: 0, journal: [
+    { label: 'Winst — Combi (3 selecties)', amount: 175.52, balance: 175.52 },
+    { label: 'Ingezet — Combi (3 selecties)', amount: -50.00, balance: 0.00 },
+    { label: 'Gestort', amount: 50.00, balance: 50.00 },
+  ]},
+  { id: 'betmgm', name: 'BetMGM', saldo: 0.00, openBets: 0, journal: [] },
+];
+
+function fmt(n) { return n.toFixed(2); }
+function signed(n) { return (n >= 0 ? '+ € ' : '− € ') + fmt(Math.abs(n)); }
+function dateLabel(iso) {
+  const [y, m, d] = iso.split('-');
+  return `${d}-${m}-${y}`;
+}
+// netto resultaat per bet: won/cashed_out = payout - stake, void = 0, lost = -stake
+function betNet(bet) {
+  const payout = bet.stake * bet.odds;
+  if (bet.status === 'won' || bet.status === 'cashed_out') return payout - bet.stake;
+  if (bet.status === 'void') return 0;
+  return -bet.stake;
+}
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { activeTab: 'perdag', selectedDayId: null, selectedBookmakerId: null };
+  }
+
+  renderVals() {
+    const isPerDag = this.state.activeTab === 'perdag';
+    const tabs = {
+      bookmakersClass: isPerDag ? '' : 'is-active',
+      perDagClass: isPerDag ? 'is-active' : '',
+      toBookmakers: () => this.setState({ activeTab: 'bookmakers' }),
+      toPerDag: () => this.setState({ activeTab: 'perdag' }),
+    };
+
+    // --- per dag ---
+    let cum = 0;
+    const daysComputed = RAW_DAYS.map((d) => {
+      const staked = d.bets.reduce((s, b) => s + b.stake, 0);
+      const result = d.bets.reduce((s, b) => s + betNet(b), 0);
+      cum += result;
+      return { ...d, staked, result, cum };
+    });
+    const totalResult = cum;
+    const selectedDay = daysComputed.find((d) => d.id === this.state.selectedDayId) || null;
+
+    const day = {
+      totals: { resultFmt: signed(totalResult), resultClass: totalResult >= 0 ? 'amount-credit' : 'amount-debit' },
+      cards: daysComputed.slice().reverse().map((d) => ({
+        dateLabel: dateLabel(d.date),
+        isToday: d.date === TODAY,
+        betCount: d.bets.length,
+        stakedFmt: fmt(d.staked),
+        resultClass: d.result > 0 ? 'amount-credit' : (d.result < 0 ? 'amount-debit' : ''),
+        resultFmt: signed(d.result),
+        cumFmt: signed(d.cum),
+        select: () => this.setState({ selectedDayId: d.id }),
+      })),
+      selected: selectedDay && {
+        dateLabel: dateLabel(selectedDay.date),
+        resultClass: selectedDay.result >= 0 ? 'amount-credit' : 'amount-debit',
+        resultFmt: signed(selectedDay.result),
+        bets: selectedDay.bets.map((bet) => {
+          const net = betNet(bet);
+          return {
+            label: bet.label,
+            bookmaker: bet.bookmaker,
+            stakeFmt: fmt(bet.stake),
+            oddsFmt: bet.odds.toFixed(2),
+            status: bet.status,
+            statusLabel: STATUS_LABELS[bet.status],
+            amountClass: net > 0 ? 'amount-positive' : (net < 0 ? 'amount-negative' : ''),
+            amountFmt: net === 0 ? '€ 0.00' : signed(net),
+          };
+        }),
+      },
+      hasSelection: !!selectedDay,
+      noSelection: !selectedDay,
+      back: () => this.setState({ selectedDayId: null }),
+    };
+
+    // --- per bookmaker (ongewijzigd, ter vergelijking bij het switchen) ---
+    const totalBalance = RAW_BOOKMAKERS.reduce((s, b) => s + b.saldo, 0);
+    const selectedBookmaker = RAW_BOOKMAKERS.find((b) => b.id === this.state.selectedBookmakerId) || null;
+    const bookmaker = {
+      totalFmt: fmt(totalBalance),
+      cards: RAW_BOOKMAKERS.map((b) => ({
+        name: b.name,
+        saldoFmt: fmt(b.saldo),
+        openLabel: b.openBets === 0 ? 'Geen open bets' : `${b.openBets} open`,
+        select: () => this.setState({ selectedBookmakerId: b.id }),
+      })),
+      selected: selectedBookmaker && {
+        name: selectedBookmaker.name,
+        saldoFmt: fmt(selectedBookmaker.saldo),
+        journal: selectedBookmaker.journal.map((row) => ({
+          label: row.label,
+          amountClass: row.amount >= 0 ? 'amount-positive' : 'amount-negative',
+          amountFmt: (row.amount >= 0 ? '+ € ' : '− € ') + fmt(Math.abs(row.amount)),
+          balanceFmt: fmt(row.balance),
+        })),
+      },
+      hasSelection: !!selectedBookmaker,
+      noSelection: !selectedBookmaker,
+      back: () => this.setState({ selectedBookmakerId: null }),
+    };
+
+    return { isPerDag, isBookmakers: !isPerDag, tabs, day, bookmaker };
+  }
+}
+</script>
+</body>
+</html>

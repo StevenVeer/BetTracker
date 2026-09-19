@@ -1,0 +1,118 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1800,
+      "h": 1050,
+      "title": "C — Split-view",
+      "is_interactive": true
+    },
+    {
+      "file": "KpiCards.dc.html",
+      "x": 1900,
+      "y": 0,
+      "w": 1800,
+      "h": 1150,
+      "title": "A — Rijke KPI-kaarten",
+      "is_interactive": true
+    },
+    {
+      "file": "DashboardTable.dc.html",
+      "x": 3800,
+      "y": 0,
+      "w": 1800,
+      "h": 1150,
+      "title": "B — Dashboard-tabel",
+      "is_interactive": true
+    },
+    {
+      "file": "DagResultaatHeader.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1400,
+      "h": 200,
+      "title": "Header — resultaat vandaag",
+      "page": "resultaat-per-dag"
+    },
+    {
+      "file": "OverzichtPerDag.dc.html",
+      "x": 0,
+      "y": 330,
+      "w": 1400,
+      "h": 820,
+      "title": "Overzicht per dag",
+      "page": "resultaat-per-dag",
+      "is_interactive": true
+    },
+    {
+      "file": "MarktRendement.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1800,
+      "h": 1150,
+      "title": "Fase 1 — Markt-winstgevendheid",
+      "page": "markt-rendement",
+      "is_interactive": true
+    },
+    {
+      "file": "EquityCurve.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1400,
+      "h": 700,
+      "title": "Fase 3 — Equity curve",
+      "page": "equity-curve",
+      "is_interactive": true
+    }
+  ],
+  "annotations": [
+    {
+      "id": "dagresultaat-note",
+      "x": 1450,
+      "y": 330,
+      "w": 320,
+      "page": "resultaat-per-dag",
+      "text": "Zelfde kaartstijl als \"Overzicht per bookmaker\", nu met titel \"Overzicht per dag\".\n\nDe switch bovenaan wisselt tussen Bookmakers en Per dag. Klik op een kaart voor het detail van die dag/bookmaker."
+    },
+    {
+      "id": "markt-rendement-note",
+      "x": 1900,
+      "y": 0,
+      "w": 340,
+      "page": "markt-rendement",
+      "text": "Nieuwe tab \"Per markt\" in het Overzicht-scherm, naast Bookmakers / Per dag / Vergelijking.\n\nFilter bovenaan wisselt tussen Eigen bets en Telegram (nooit gemengd). Klik op een markt om de losse selecties te zien.\n\nROI/Ingezet/Resultaat tellen alleen singles — combi's zijn niet eerlijk toe te rekenen aan één leg. Hitrate telt wel alle legs. Gesorteerd op ROI, aflopend."
+    },
+    {
+      "id": "equity-curve-note",
+      "x": 1450,
+      "y": 0,
+      "w": 340,
+      "page": "equity-curve",
+      "text": "Zit bovenaan het dashboard, onder de bestaande Bets/Inzet/Resultaat-tegels (niet ertussen geperst — een leesbare lijn heeft meer breedte nodig dan een tegel biedt).\n\nAlleen afgehandelde bets (won/lost/void), cumulatief op settlement-datum. Filter wisselt tussen Eigen bets en Telegram, nooit gemengd. Kleur volgt het eindresultaat (groen boven nul, rood eronder)."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "equity-curve"
+  },
+  "pages": [
+    {
+      "id": "bookmaker-overzicht",
+      "name": "Bookmaker overzicht"
+    },
+    {
+      "id": "resultaat-per-dag",
+      "name": "Resultaat per dag"
+    },
+    {
+      "id": "markt-rendement",
+      "name": "Fase 1 — Markt-winstgevendheid"
+    },
+    {
+      "id": "equity-curve",
+      "name": "Fase 3 — Equity curve"
+    }
+  ]
+}

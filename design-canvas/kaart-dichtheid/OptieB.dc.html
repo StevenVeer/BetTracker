@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&amp;family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: radial-gradient(circle 1000px at 50% -100px, #163f30, #081714 65%); font-family: 'Oswald', sans-serif; color: #f4f2e8; }
+  a { color: #6fa8d1; } a:hover { color: #8fc0e3; }
+  .app { max-width: 1400px; margin: 0 auto; padding: 40px 30px 60px; }
+  .crumb { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(244, 242, 232, 0.4); }
+  .crumb b { color: rgba(244, 242, 232, 0.75); font-weight: 500; }
+  .filters { display: flex; gap: 4px; background: rgba(10, 18, 16, 0.55); border: 1px solid rgba(232, 178, 61, 0.25); border-radius: 10px; padding: 4px; width: fit-content; margin-bottom: 24px; }
+  .filter-tab { border: none; background: transparent; padding: 8px 16px; border-radius: 7px; font-family: 'Oswald', sans-serif; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(244, 242, 232, 0.55); }
+  .filter-tab.is-active { background: rgba(232, 178, 61, 0.16); color: #e8b23d; font-weight: 600; }
+
+  .bookmaker-hero { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+  .bookmaker-hero h3 { margin: 0; font-size: 24px; letter-spacing: 0.03em; text-transform: uppercase; color: #f4f2e8; }
+  .hero-note { font-family: 'Space Mono', monospace; font-size: 11px; color: rgba(244, 242, 232, 0.4); margin-top: 4px; }
+  .bookmaker-hero-stat { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+  .bookmaker-hero-stat .lab { color: rgba(244, 242, 232, 0.5); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .bookmaker-hero-stat strong { font-family: 'Space Mono', monospace; font-size: 28px; font-weight: 700; color: #e8b23d; }
+
+  .bookmaker-list { background: rgba(10, 18, 16, 0.5); border: 1px solid rgba(232, 178, 61, 0.2); border-radius: 16px; overflow: hidden; }
+  .b-row { display: grid; grid-template-columns: 210px 110px 1fr 170px 34px; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid rgba(244, 242, 232, 0.07); }
+  .b-row:last-child { border-bottom: none; }
+  .b-row:hover { background: rgba(232, 178, 61, 0.05); }
+  .b-row.is-bank { background: rgba(111, 168, 209, 0.07); }
+  .b-row.is-bank:hover { background: rgba(111, 168, 209, 0.1); }
+  .b-name { display: flex; align-items: center; gap: 9px; font-size: 15px; letter-spacing: 0.02em; text-transform: uppercase; color: #f4f2e8; }
+  .b-chip { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; border: 1px solid rgba(232, 178, 61, 0.4); color: #e8b23d; white-space: nowrap; justify-self: start; }
+  .b-chip.bank { border-color: rgba(111, 168, 209, 0.5); color: #8fc0e3; }
+  .b-chip.muted { border-color: rgba(244, 242, 232, 0.15); color: rgba(244, 242, 232, 0.35); }
+  .b-bal { font-family: 'Space Mono', monospace; font-size: 20px; font-weight: 700; color: #f4f2e8; text-align: right; }
+  .b-bal.bank { color: #8fc0e3; }
+  .b-bal.zero { color: rgba(244, 242, 232, 0.3); font-size: 16px; }
+  .b-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  .b-actions input { width: 76px; font-family: 'Space Mono', monospace; font-size: 12px; padding: 7px 9px; border: 1px solid rgba(244, 242, 232, 0.15); border-radius: 6px; color: #f4f2e8; background: #0a1210; }
+  .icon-btn { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; border: 1px solid rgba(244, 242, 232, 0.2); background: transparent; color: rgba(244, 242, 232, 0.7); flex-shrink: 0; }
+  .icon-btn.gold { border-color: rgba(232, 178, 61, 0.4); color: #e8b23d; }
+  .b-chevron { color: rgba(244, 242, 232, 0.3); text-align: center; }
+
+  .callout { margin-top: 28px; padding: 16px 20px; background: rgba(111, 168, 209, 0.06); border: 1px dashed rgba(111, 168, 209, 0.35); border-radius: 12px; font-family: 'Space Mono', monospace; font-size: 12px; line-height: 1.7; color: rgba(244, 242, 232, 0.65); }
+  .callout b { color: #8fc0e3; }
+</style>
+</helmet>
+
+<div class="app">
+  <div class="crumb">Overzicht <span>&#8250;</span> <b>Bookmakers</b></div>
+  <nav class="filters">
+    <button class="filter-tab is-active" type="button">Bookmakers</button>
+    <button class="filter-tab" type="button">Per dag</button>
+    <button class="filter-tab" type="button">Vergelijking</button>
+    <button class="filter-tab" type="button">Per markt</button>
+    <button class="filter-tab" type="button">Rapport</button>
+  </nav>
+
+  <div class="bookmaker-hero">
+    <div>
+      <h3>Overzicht per bookmaker</h3>
+      <div class="hero-note">Optie B — alle rekeningen als rijen in één lijst, allemaal even compact</div>
+    </div>
+    <div class="bookmaker-hero-stat"><span class="lab">Totaal vermogen</span><strong>EUR 1183.69</strong></div>
+  </div>
+
+  <div class="bookmaker-list">
+    <div class="b-row is-bank">
+      <span class="b-name">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8fc0e3" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6" /><path d="M5 10v9M10 10v9M14 10v9M19 10v9" /><path d="M3 21h18" /></svg>
+        ING
+      </span>
+      <span class="b-chip bank">Bankrekening</span>
+      <span class="b-bal bank">EUR 1000.00</span>
+      <span></span>
+      <span class="b-chevron">&#8250;</span>
+    </div>
+    <div class="b-row">
+      <span class="b-name">BetCity</span>
+      <span class="b-chip muted">Geen open</span>
+      <span class="b-bal">EUR 183.69</span>
+      <div class="b-actions">
+        <input placeholder="bedrag" />
+        <button class="icon-btn gold" type="button" title="Storten">+</button>
+        <button class="icon-btn" type="button" title="Uitbetaald">&#8722;</button>
+      </div>
+      <span class="b-chevron">&#8250;</span>
+    </div>
+    <div class="b-row">
+      <span class="b-name">Bet365</span>
+      <span class="b-chip muted">Geen open</span>
+      <span class="b-bal zero">EUR 0.00</span>
+      <div class="b-actions">
+        <input placeholder="bedrag" />
+        <button class="icon-btn gold" type="button" title="Storten">+</button>
+        <button class="icon-btn" type="button" title="Uitbetaald">&#8722;</button>
+      </div>
+      <span class="b-chevron">&#8250;</span>
+    </div>
+    <div class="b-row">
+      <span class="b-name">Toto</span>
+      <span class="b-chip muted">Geen open</span>
+      <span class="b-bal zero">EUR 0.00</span>
+      <div class="b-actions">
+        <input placeholder="bedrag" />
+        <button class="icon-btn gold" type="button" title="Storten">+</button>
+        <button class="icon-btn" type="button" title="Uitbetaald">&#8722;</button>
+      </div>
+      <span class="b-chevron">&#8250;</span>
+    </div>
+    <div class="b-row">
+      <span class="b-name">Unibet</span>
+      <span class="b-chip muted">Geen open</span>
+      <span class="b-bal zero">EUR 0.00</span>
+      <div class="b-actions">
+        <input placeholder="bedrag" />
+        <button class="icon-btn gold" type="button" title="Storten">+</button>
+        <button class="icon-btn" type="button" title="Uitbetaald">&#8722;</button>
+      </div>
+      <span class="b-chevron">&#8250;</span>
+    </div>
+    <div class="b-row">
+      <span class="b-name">711</span>
+      <span class="b-chip">1 open</span>
+      <span class="b-bal zero">EUR 0.00</span>
+      <div class="b-actions">
+        <input placeholder="bedrag" />
+        <button class="icon-btn gold" type="button" title="Storten">+</button>
+        <button class="icon-btn" type="button" title="Uitbetaald">&#8722;</button>
+      </div>
+      <span class="b-chevron">&#8250;</span>
+    </div>
+    <div class="b-row">
+      <span class="b-name">BetMGM</span>
+      <span class="b-chip muted">Geen open</span>
+      <span class="b-bal zero">EUR 0.00</span>
+      <div class="b-actions">
+        <input placeholder="bedrag" />
+        <button class="icon-btn gold" type="button" title="Storten">+</button>
+        <button class="icon-btn" type="button" title="Uitbetaald">&#8722;</button>
+      </div>
+      <span class="b-chevron">&#8250;</span>
+    </div>
+  </div>
+
+  <div class="callout">
+    <b>Idee —</b> alle 7 rekeningen passen ruim op één scherm, ook met veel meer bookmakers erbij. Grootste verandering
+    t.o.v. nu (kaarten worden rijen), en je verliest het "grote saldo-cijfer op een kaart"-gevoel — alles oogt vlakker/zakelijker,
+    meer een tabel dan een overzicht.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

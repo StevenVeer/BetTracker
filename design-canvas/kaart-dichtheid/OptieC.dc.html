@@ -1,0 +1,137 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&amp;family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: radial-gradient(circle 1000px at 50% -100px, #163f30, #081714 65%); font-family: 'Oswald', sans-serif; color: #f4f2e8; }
+  a { color: #6fa8d1; } a:hover { color: #8fc0e3; }
+  .app { max-width: 1400px; margin: 0 auto; padding: 40px 30px 60px; }
+  .crumb { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(244, 242, 232, 0.4); }
+  .crumb b { color: rgba(244, 242, 232, 0.75); font-weight: 500; }
+  .filters { display: flex; gap: 4px; background: rgba(10, 18, 16, 0.55); border: 1px solid rgba(232, 178, 61, 0.25); border-radius: 10px; padding: 4px; width: fit-content; margin-bottom: 24px; }
+  .filter-tab { border: none; background: transparent; padding: 8px 16px; border-radius: 7px; font-family: 'Oswald', sans-serif; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(244, 242, 232, 0.55); }
+  .filter-tab.is-active { background: rgba(232, 178, 61, 0.16); color: #e8b23d; font-weight: 600; }
+
+  .bookmaker-hero { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+  .bookmaker-hero h3 { margin: 0; font-size: 24px; letter-spacing: 0.03em; text-transform: uppercase; color: #f4f2e8; }
+  .hero-note { font-family: 'Space Mono', monospace; font-size: 11px; color: rgba(244, 242, 232, 0.4); margin-top: 4px; }
+  .bookmaker-hero-stat { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+  .bookmaker-hero-stat .lab { color: rgba(244, 242, 232, 0.5); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .bookmaker-hero-stat strong { font-family: 'Space Mono', monospace; font-size: 28px; font-weight: 700; color: #e8b23d; }
+
+  .bookmaker-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
+  .bookmaker-card { background: rgba(10, 18, 16, 0.55); border: 1px solid rgba(232, 178, 61, 0.22); border-radius: 16px; padding: 26px; }
+  .bookmaker-card.is-bank { border-color: rgba(111, 168, 209, 0.45); background: rgba(111, 168, 209, 0.06); }
+  .bookmaker-card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; gap: 10px; }
+  .bookmaker-name { display: inline-flex; align-items: center; gap: 9px; font-size: 19px; letter-spacing: 0.03em; text-transform: uppercase; color: #f4f2e8; }
+  .site-link-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(244, 242, 232, 0.25); color: rgba(244, 242, 232, 0.6); font-size: 13px; text-decoration: none; }
+  .bookmaker-open-chip { flex-shrink: 0; font-family: 'Oswald', sans-serif; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 11px; border-radius: 999px; border: 1px solid rgba(232, 178, 61, 0.4); color: #e8b23d; white-space: nowrap; }
+  .bank-chip { border-color: rgba(111, 168, 209, 0.5); color: #8fc0e3; }
+  .bookmaker-balance { font-family: 'Space Mono', monospace; font-size: 38px; font-weight: 700; color: #f4f2e8; margin: 0 0 18px; }
+  .withdraw-form { display: flex; gap: 8px; }
+  .withdraw-form input { flex: 1; min-width: 0; font-family: 'Space Mono', monospace; font-size: 14px; padding: 10px 12px; border: 1px solid rgba(244, 242, 232, 0.15); border-radius: 7px; color: #f4f2e8; background: #0a1210; }
+  .btn { border: 1px solid rgba(244, 242, 232, 0.25); background: transparent; border-radius: 8px; padding: 10px 16px; font-family: 'Oswald', sans-serif; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: #f4f2e8; }
+  .btn-primary { background: #e8b23d; border-color: #e8b23d; color: #0a1210; font-weight: 700; }
+  .btn-small { padding: 6px 11px; font-size: 10.5px; }
+  .bank-card-note { margin: 0; font-family: 'Space Mono', monospace; font-size: 11px; color: rgba(244, 242, 232, 0.5); }
+
+  .mini-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .mini-card { background: rgba(10, 18, 16, 0.4); border: 1px solid rgba(244, 242, 232, 0.12); border-radius: 10px; padding: 14px; }
+  .mini-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .mini-name { font-size: 12.5px; letter-spacing: 0.03em; text-transform: uppercase; color: rgba(244, 242, 232, 0.8); }
+  .mini-dot { width: 6px; height: 6px; border-radius: 50%; background: #e8b23d; }
+  .mini-bal { font-family: 'Space Mono', monospace; font-size: 15px; color: rgba(244, 242, 232, 0.4); margin: 0 0 10px; }
+  .mini-form { display: flex; gap: 5px; }
+  .mini-form input { width: 100%; min-width: 0; font-family: 'Space Mono', monospace; font-size: 11px; padding: 6px 7px; border: 1px solid rgba(244, 242, 232, 0.15); border-radius: 5px; color: #f4f2e8; background: #0a1210; }
+  .mini-form button { flex-shrink: 0; border: 1px solid rgba(232, 178, 61, 0.35); background: transparent; border-radius: 5px; padding: 6px 9px; font-size: 10px; color: #e8b23d; }
+
+  .callout { margin-top: 28px; padding: 16px 20px; background: rgba(111, 168, 209, 0.06); border: 1px dashed rgba(111, 168, 209, 0.35); border-radius: 12px; font-family: 'Space Mono', monospace; font-size: 12px; line-height: 1.7; color: rgba(244, 242, 232, 0.65); }
+  .callout b { color: #8fc0e3; }
+</style>
+</helmet>
+
+<div class="app">
+  <div class="crumb">Overzicht <span>&#8250;</span> <b>Bookmakers</b></div>
+  <nav class="filters">
+    <button class="filter-tab is-active" type="button">Bookmakers</button>
+    <button class="filter-tab" type="button">Per dag</button>
+    <button class="filter-tab" type="button">Vergelijking</button>
+    <button class="filter-tab" type="button">Per markt</button>
+    <button class="filter-tab" type="button">Rapport</button>
+  </nav>
+
+  <div class="bookmaker-hero">
+    <div>
+      <h3>Overzicht per bookmaker</h3>
+      <div class="hero-note">Optie C — zelfde kaarten-look, twee tegel-groottes binnen één raster</div>
+    </div>
+    <div class="bookmaker-hero-stat"><span class="lab">Totaal vermogen</span><strong>EUR 1183.69</strong></div>
+  </div>
+
+  <div class="bookmaker-cards">
+    <div class="bookmaker-card is-bank">
+      <div class="bookmaker-card-top">
+        <span class="bookmaker-name">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8fc0e3" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6" /><path d="M5 10v9M10 10v9M14 10v9M19 10v9" /><path d="M3 21h18" /></svg>
+          ING
+        </span>
+        <span class="bookmaker-open-chip bank-chip">Bankrekening</span>
+      </div>
+      <p class="bookmaker-balance" style="color:#8fc0e3">EUR 1000.00</p>
+      <p class="bank-card-note">Bron van stortingen · doel van opnames</p>
+    </div>
+    <div class="bookmaker-card">
+      <div class="bookmaker-card-top">
+        <span class="bookmaker-name">BetCity <a class="site-link-btn">&#8599;</a></span>
+        <span class="bookmaker-open-chip">Geen open bets</span>
+      </div>
+      <p class="bookmaker-balance">EUR 183.69</p>
+      <div class="withdraw-form"><input placeholder="bedrag" /><button class="btn btn-primary btn-small" type="button">Uitbetaald</button></div>
+    </div>
+  </div>
+
+  <div class="mini-grid">
+    <div class="mini-card">
+      <div class="mini-top"><span class="mini-name">Bet365</span></div>
+      <p class="mini-bal">EUR 0.00</p>
+      <div class="mini-form"><input placeholder="bedrag" /><button type="button">+</button></div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-top"><span class="mini-name">Toto</span></div>
+      <p class="mini-bal">EUR 0.00</p>
+      <div class="mini-form"><input placeholder="bedrag" /><button type="button">+</button></div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-top"><span class="mini-name">Unibet</span></div>
+      <p class="mini-bal">EUR 0.00</p>
+      <div class="mini-form"><input placeholder="bedrag" /><button type="button">+</button></div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-top"><span class="mini-name">711</span><span class="mini-dot" title="1 open bet"></span></div>
+      <p class="mini-bal">EUR 0.00</p>
+      <div class="mini-form"><input placeholder="bedrag" /><button type="button">+</button></div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-top"><span class="mini-name">BetMGM</span></div>
+      <p class="mini-bal">EUR 0.00</p>
+      <div class="mini-form"><input placeholder="bedrag" /><button type="button">+</button></div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <b>Idee —</b> tussenweg tussen A en B: bookmakers met saldo/open bets blijven de vertrouwde grote kaart, de lege groep
+    krijgt een eigen dicht rasterrij (5 per rij i.p.v. 3) in dezelfde kaart-stijl, alleen kleiner. Blijft dicht bij hoe het er nu
+    al uitziet, dus kleinste leercurve; met veel meer lege bookmakers wordt die onderste rij wel weer een blok.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
