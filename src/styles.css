@@ -2270,6 +2270,24 @@ body {
   color: rgba(244, 242, 232, 0.5);
 }
 
+.sample-badge {
+  font-family: 'Space Mono', ui-monospace, SFMono-Regular, monospace;
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 242, 232, 0.2);
+  color: rgba(244, 242, 232, 0.45);
+}
+
+.market-row--low-sample .market-row-main,
+.market-row--low-sample.market-sub-row {
+  opacity: 0.55;
+}
+.market-row--low-sample .market-row-main:hover,
+.market-row--low-sample.market-sub-row:hover {
+  opacity: 0.8;
+}
+
 .market-table {
   background: rgba(10, 18, 16, 0.55);
   border: 1px solid rgba(232, 178, 61, 0.22);
