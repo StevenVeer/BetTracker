@@ -436,26 +436,26 @@ export default function App() {
                   onClick={() => setPicksModal({ source: 'telegram', kind: 'unsettled' })}
                 />
               )}
-              <MoreMenu
-                items={[
-                  {
-                    key: 'odds',
-                    icon: 'send',
-                    label: refreshingTelegramOdds ? 'Odds ophalen…' : 'Odds ophalen',
-                    disabled: refreshingTelegramOdds,
-                    onClick: handleRefreshTelegramOdds,
-                  },
-                  {
-                    key: 'backfill',
-                    icon: 'history',
-                    label: backfillingTelegram ? 'Backfill…' : 'Backfill',
-                    disabled: backfillingTelegram,
-                    onClick: handleBackfillTelegram,
-                  },
-                  scoresMenuItem,
-                ]}
-              />
             </div>
+            <MoreMenu
+              items={[
+                {
+                  key: 'odds',
+                  icon: 'send',
+                  label: refreshingTelegramOdds ? 'Odds ophalen…' : 'Odds ophalen',
+                  disabled: refreshingTelegramOdds,
+                  onClick: handleRefreshTelegramOdds,
+                },
+                {
+                  key: 'backfill',
+                  icon: 'history',
+                  label: backfillingTelegram ? 'Backfill…' : 'Backfill',
+                  disabled: backfillingTelegram,
+                  onClick: handleBackfillTelegram,
+                },
+                scoresMenuItem,
+              ]}
+            />
           </div>
           <LiveStatus updatedAt={liveFeed.updatedAt} error={liveFeed.error} onRefresh={loadLiveOverlay} />
 
@@ -508,14 +508,14 @@ export default function App() {
                 />
               )}
               <CountButton icon="bookmark" label="Gepland" count={plannedBets.length} onClick={() => setShowPlanned(true)} />
-              <MoreMenu
-                items={[
-                  { key: 'import', icon: 'image', label: 'Importeer screenshot', onClick: () => setShowImport(true) },
-                  scoresMenuItem,
-                ]}
-              />
             </div>
             <BetForm onCreated={handleCreated} />
+            <MoreMenu
+              items={[
+                { key: 'import', icon: 'image', label: 'Importeer screenshot', onClick: () => setShowImport(true) },
+                scoresMenuItem,
+              ]}
+            />
           </div>
           <LiveStatus updatedAt={liveFeed.updatedAt} error={liveFeed.error} onRefresh={loadLiveOverlay} />
 
