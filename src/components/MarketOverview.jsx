@@ -26,6 +26,16 @@ function betsFmt(row) {
   return `${row.totalLegs} (${row.singles} single / ${row.combi} combi)`;
 }
 
+// Onder deze grens is een hitrate/yield te veel toeval om als signaal te
+// vertrouwen (bv. 1 bet gewonnen = 100% hitrate, maar zegt niks). Zulke
+// rijen blijven zichtbaar (nooit data verbergen), maar worden gedempt en
+// krijgen een n=X badge, en tellen niet mee voor "beste/slechtste markt".
+const MIN_SAMPLE = 10;
+
+function isLowSample(row) {
+  return row.totalLegs < MIN_SAMPLE;
+}
+
 export default function MarketOverview() {
   const [source, setSource] = useState('manual');
   const [data, setData] = useState(null);
@@ -55,8 +65,10 @@ export default function MarketOverview() {
   }
 
   const markets = data?.markets || [];
-  const best = markets[0];
-  const worst = markets.length > 1 ? markets[markets.length - 1] : null;
+  const confident = markets.filter((m) => !isLowSample(m));
+  const rankedForBestWorst = confident.length > 0 ? confident : markets;
+  const best = rankedForBestWorst[0];
+  const worst = rankedForBestWorst.length > 1 ? rankedForBestWorst[rankedForBestWorst.length - 1] : null;
 
   return (
     <div>
@@ -104,12 +116,14 @@ export default function MarketOverview() {
             </div>
             {markets.map((m) => {
               const isOpen = !!expanded[m.key];
+              const lowSample = isLowSample(m);
               return (
-                <div className={`market-row ${isOpen ? 'is-expanded' : ''}`} key={m.key}>
+                <div className={`market-row ${isOpen ? 'is-expanded' : ''} ${lowSample ? 'market-row--low-sample' : ''}`} key={m.key}>
                   <div className="market-row-main" onClick={() => toggle(m.key)}>
                     <div className="market-name">
                       {m.label}
                       {m.freeform && <span className="tag-freeform">vrije tekst</span>}
+                      {lowSample && <span className="sample-badge" title={`Minder dan ${MIN_SAMPLE} legs — nog geen betrouwbaar signaal`}>n={m.totalLegs}</span>}
                     </div>
                     <div className="mono">{betsFmt(m)}</div>
                     <div className="hitrate-cell">
@@ -126,10 +140,21 @@ export default function MarketOverview() {
                       {m.selections.map((s) => {
                         const picksKey = `${m.key}::${s.key}`;
                         const picksOpen = !!expandedPicks[picksKey];
+                        const selectionLowSample = isLowSample(s);
                         return (
                           <div key={s.key}>
-                            <div className={`market-sub-row ${picksOpen ? 'is-expanded' : ''}`} onClick={() => togglePicks(m.key, s.key)}>
-                              <div>{s.label}</div>
+                            <div
+                              className={`market-sub-row ${picksOpen ? 'is-expanded' : ''} ${selectionLowSample ? 'market-row--low-sample' : ''}`}
+                              onClick={() => togglePicks(m.key, s.key)}
+                            >
+                              <div>
+                                {s.label}
+                                {selectionLowSample && (
+                                  <span className="sample-badge" title={`Minder dan ${MIN_SAMPLE} legs — nog geen betrouwbaar signaal`}>
+                                    n={s.totalLegs}
+                                  </span>
+                                )}
+                              </div>
                               <div className="mono">{betsFmt(s)}</div>
                               <div className="hitrate-cell">
                                 <span className="mono">{Math.round(s.hitrate)}%</span>
@@ -176,6 +201,9 @@ export default function MarketOverview() {
             <b>S</b> = single · <b>C</b> = combi-leg. Hitrate telt alle legs, single én combi; yield telt alleen legs met een bekende odds
             (een net-binnengekomen telegram-pick zonder odds telt dus wel mee in hitrate, nog niet in yield). Gesorteerd op yield
             (aflopend).
+            <br />
+            Rijen met minder dan {MIN_SAMPLE} legs (badge <b>n=…</b>) zijn gedempt — te weinig data voor een betrouwbaar signaal, en ze
+            tellen niet mee voor "beste/slechtste markt" hierboven.
           </p>
         </>
       )}
