@@ -91,5 +91,16 @@ export async function extractBetsFromImages(images) {
     throw Object.assign(new Error(`Anthropic API: ${detail}`), { status: 502 });
   }
   const toolUse = data?.content?.find((block) => block.type === 'tool_use');
-  return Array.isArray(toolUse?.input?.bets) ? toolUse.input.bets : [];
+  // Het model levert `bets` soms als JSON-tekst i.p.v. als echte array (en
+  // soms zelfs met de {bets: [...]} wrapper erbij); dat vangen we hier op.
+  let bets = toolUse?.input?.bets;
+  if (typeof bets === 'string') {
+    try {
+      bets = JSON.parse(bets);
+    } catch {
+      bets = [];
+    }
+  }
+  if (bets && !Array.isArray(bets) && Array.isArray(bets.bets)) bets = bets.bets;
+  return Array.isArray(bets) ? bets : [];
 }

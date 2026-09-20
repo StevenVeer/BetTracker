@@ -335,7 +335,7 @@ export default function ScreenshotImportModal({ onClose, onCreated }) {
                           />
                         </label>
                       )}
-                      <label className="field">
+                      <label className="field import-field-date">
                         <span>Geplaatst</span>
                         <input type="datetime-local" value={draft.placedAt} onChange={(e) => updateDraft(i, { placedAt: e.target.value })} />
                       </label>
