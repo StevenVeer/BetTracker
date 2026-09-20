@@ -161,7 +161,7 @@ function LedgerDetail({ bookmaker, onBack, onChanged }) {
     <div className="bookmaker-ledger">
       <div className="card-header">
         <h3>{bookmaker}</h3>
-        <button type="button" className="btn btn-ghost" onClick={onBack}>
+        <button type="button" className="btn btn-back" onClick={onBack}>
           ← Terug naar overzicht
         </button>
       </div>
@@ -256,7 +256,7 @@ function IngLedger({ onBack, onChanged }) {
           <BankIcon />
           ING
         </h3>
-        <button type="button" className="btn btn-ghost" onClick={onBack}>
+        <button type="button" className="btn btn-back" onClick={onBack}>
           ← Terug naar overzicht
         </button>
       </div>

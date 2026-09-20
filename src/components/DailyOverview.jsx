@@ -37,7 +37,7 @@ function DayDetail({ day, onBack }) {
     <div className="bookmaker-ledger">
       <div className="card-header">
         <h3>{formatDate(day.date)}</h3>
-        <button type="button" className="btn btn-ghost" onClick={onBack}>
+        <button type="button" className="btn btn-back" onClick={onBack}>
           ← Terug naar overzicht
         </button>
       </div>

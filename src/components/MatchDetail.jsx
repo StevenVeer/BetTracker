@@ -109,29 +109,139 @@ function TimelineRow({ event, match }) {
   );
 }
 
-function LineupColumn({ lineup, fallbackName }) {
-  if (!lineup) return <div />;
+// Verdeelt de basisspelers over linies: eerst via de formatie (bv. "4-3-3",
+// spelers komen van achter naar voor), anders via de positie-afkortingen.
+function lineupRows(lineup) {
+  const { starters, formation } = lineup;
+  const counts = formation ? formation.split('-').map(Number) : [];
+  if (counts.length > 0 && counts.every((n) => n > 0) && counts.reduce((a, b) => a + b, 1) === starters.length) {
+    const rows = [[starters[0]]];
+    let i = 1;
+    for (const n of counts) {
+      rows.push(starters.slice(i, i + n));
+      i += n;
+    }
+    return rows;
+  }
+  const rows = [[], [], [], []];
+  for (const p of starters) {
+    const pos = p.position || '';
+    let k = 3;
+    if (pos === 'G') k = 0;
+    else if (/^(CD|SW)|B$/.test(pos)) k = 1;
+    else if (/^(CM|DM|AM)|M$/.test(pos)) k = 2;
+    rows[k].push(p);
+  }
+  return rows.filter((r) => r.length > 0);
+}
+
+function shortName(name) {
+  const parts = name.trim().split(/\s+/);
+  return parts.length > 1 ? parts.slice(1).join(' ') : parts[0];
+}
+
+function useIsNarrow() {
+  const query = '(max-width: 640px)';
+  const [narrow, setNarrow] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = () => setNarrow(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return narrow;
+}
+
+function PitchLines({ vertical }) {
+  const w = vertical ? 68 : 105;
+  const h = vertical ? 105 : 68;
+  return (
+    <svg className="md-pitch-lines" viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+      <g fill="none" stroke="rgba(244, 242, 232, 0.35)" strokeWidth="0.35">
+        <rect x="0.5" y="0.5" width={w - 1} height={h - 1} />
+        <circle cx={w / 2} cy={h / 2} r="9.15" />
+        {vertical ? (
+          <>
+            <line x1="0.5" y1={h / 2} x2={w - 0.5} y2={h / 2} />
+            <rect x="13.85" y="0.5" width="40.3" height="16.5" />
+            <rect x="13.85" y={h - 17} width="40.3" height="16.5" />
+            <rect x="24.85" y="0.5" width="18.3" height="5.5" />
+            <rect x="24.85" y={h - 6} width="18.3" height="5.5" />
+          </>
+        ) : (
+          <>
+            <line x1={w / 2} y1="0.5" x2={w / 2} y2={h - 0.5} />
+            <rect x="0.5" y="13.85" width="16.5" height="40.3" />
+            <rect x={w - 17} y="13.85" width="16.5" height="40.3" />
+            <rect x="0.5" y="24.85" width="5.5" height="18.3" />
+            <rect x={w - 6} y="24.85" width="5.5" height="18.3" />
+          </>
+        )}
+      </g>
+    </svg>
+  );
+}
+
+function PitchTeam({ lineup, side, vertical }) {
+  const rows = lineupRows(lineup);
+  return rows.flatMap((row, i) => {
+    // Keeper vlak bij de eigen doellijn, de voorste linie tot net voorbij de middellijn.
+    const depth = 7 + (i * 40) / Math.max(rows.length - 1, 1);
+    const along = side === 'home' ? depth : 100 - depth;
+    return row.map((p, j) => {
+      const across = ((j + 0.5) * 100) / row.length;
+      const style = vertical ? { left: `${across}%`, top: `${along}%` } : { left: `${along}%`, top: `${across}%` };
+      return (
+        <div className="md-pl" style={style} key={`${side}-${i}-${j}`}>
+          <span className={`md-pl-dot is-${side}`}>{p.number}</span>
+          <span className="md-pl-name">{shortName(p.name)}</span>
+        </div>
+      );
+    });
+  });
+}
+
+function BenchList({ lineup, fallbackName }) {
+  if (!lineup || lineup.subs.length === 0) return <div />;
   return (
     <div>
-      <div className="md-lineup-head">
-        {lineup.team || fallbackName}
-        {lineup.formation && <span className="muted"> · {lineup.formation}</span>}
-      </div>
-      {lineup.starters.map((p, i) => (
-        <div className="md-lineup-row" key={`s${i}`}>
-          <span className="md-lineup-num">{p.number}</span>
+      <div className="md-lineup-sub-head">Bank {lineup.team || fallbackName}</div>
+      {lineup.subs.map((p, i) => (
+        <div className="md-bench-row" key={i}>
+          <span className="md-bench-num">{p.number}</span>
           {p.name}
           {p.position && <span className="muted"> · {p.position}</span>}
         </div>
       ))}
-      {lineup.subs.length > 0 && <div className="md-lineup-sub-head">Bank</div>}
-      {lineup.subs.map((p, i) => (
-        <div className="md-lineup-row is-sub" key={`b${i}`}>
-          <span className="md-lineup-num">{p.number}</span>
-          {p.name}
-        </div>
-      ))}
     </div>
+  );
+}
+
+function LineupPitch({ lineups, match }) {
+  const vertical = useIsNarrow();
+  const { home, away } = lineups;
+  const teamLabel = (l, fallback) => (
+    <span>
+      {l?.team || fallback}
+      {l?.formation && <span className="muted"> · {l.formation}</span>}
+    </span>
+  );
+  return (
+    <>
+      <div className="md-pitch-legend">
+        <span className="is-home">{teamLabel(home, match.home)}</span>
+        <span className="is-away">{teamLabel(away, match.away)}</span>
+      </div>
+      <div className={`md-pitch${vertical ? ' is-vertical' : ''}`}>
+        <PitchLines vertical={vertical} />
+        {home && <PitchTeam lineup={home} side="home" vertical={vertical} />}
+        {away && <PitchTeam lineup={away} side="away" vertical={vertical} />}
+      </div>
+      <div className="md-lineup-grid">
+        <BenchList lineup={home} fallbackName={match.home} />
+        <BenchList lineup={away} fallbackName={match.away} />
+      </div>
+    </>
   );
 }
 
@@ -185,7 +295,7 @@ export default function MatchDetail({ listMatch, onBack, onToggleFavorite }) {
   return (
     <div className="live-scores match-detail">
       <div className="md-top">
-        <button type="button" className="btn btn-ghost btn-small" onClick={onBack}>
+        <button type="button" className="btn btn-back btn-small" onClick={onBack}>
           ← Live
         </button>
         <span className="md-league">{match.league}</span>
@@ -221,6 +331,13 @@ export default function MatchDetail({ listMatch, onBack, onToggleFavorite }) {
         <p className="hint-text">Laden…</p>
       ) : detail ? (
         <>
+          {detail.lineups && (
+            <div className="md-card md-lineups">
+              <div className="md-card-title">Opstellingen</div>
+              <LineupPitch lineups={detail.lineups} match={match} />
+            </div>
+          )}
+
           <div className="md-card">
             <div className="md-card-title">
               Statistieken
@@ -266,15 +383,6 @@ export default function MatchDetail({ listMatch, onBack, onToggleFavorite }) {
             )}
           </div>
 
-          {detail.lineups && (
-            <details className="md-card md-lineups">
-              <summary className="md-card-title">Opstellingen</summary>
-              <div className="md-lineup-grid">
-                <LineupColumn lineup={detail.lineups.home} fallbackName={match.home} />
-                <LineupColumn lineup={detail.lineups.away} fallbackName={match.away} />
-              </div>
-            </details>
-          )}
 
           <p className="hint-text md-source">
             Bron: ESPN · ververst elke 20 seconden zolang deze pagina open staat

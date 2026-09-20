@@ -634,6 +634,16 @@ body {
   color: rgba(244, 242, 232, 0.55);
 }
 
+.btn-back {
+  border-color: rgba(232, 178, 61, 0.45);
+  color: var(--gold);
+}
+.btn-back:hover:not(:disabled) {
+  background: rgba(232, 178, 61, 0.14);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
 .btn-small {
   padding: 6px 11px;
   font-size: 10.5px;
@@ -3528,13 +3538,6 @@ body {
 .md-tl-chip.is-sub {
   background: var(--bank-soft);
 }
-.md-lineups > summary {
-  cursor: pointer;
-  margin-bottom: 0;
-}
-.md-lineups[open] > summary {
-  margin-bottom: 12px;
-}
 .md-pitch-legend {
   display: flex;
   justify-content: space-between;
@@ -3578,18 +3581,17 @@ body {
 }
 .md-pl {
   position: absolute;
-  width: 0;
-  height: 0;
+  width: 84px;
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  overflow: visible;
+  text-align: center;
 }
 .md-pl-dot {
   flex: none;
   width: 26px;
   height: 26px;
-  margin-top: -13px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3606,7 +3608,7 @@ body {
 }
 .md-pl-name {
   margin-top: 2px;
-  max-width: 76px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3628,22 +3630,14 @@ body {
   text-transform: uppercase;
   color: rgba(244, 242, 232, 0.5);
 }
-.md-bench-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.md-bench-row {
+  padding: 2px 0;
+  color: rgba(244, 242, 232, 0.75);
 }
-.md-bench-chip {
-  padding: 3px 8px;
-  border: 1px solid rgba(244, 242, 232, 0.15);
-  border-radius: 6px;
-  font-size: 12px;
-  color: rgba(244, 242, 232, 0.7);
-}
-.md-bench-chip b {
-  margin-right: 6px;
+.md-bench-num {
+  display: inline-block;
+  width: 26px;
   font-family: 'Space Mono', ui-monospace, SFMono-Regular, monospace;
-  font-weight: 400;
   color: rgba(244, 242, 232, 0.45);
 }
 .md-source {
@@ -3667,8 +3661,10 @@ body {
   .md-lineup-grid {
     grid-template-columns: 1fr;
   }
+  .md-pl {
+    width: 60px;
+  }
   .md-pl-name {
-    max-width: 58px;
     font-size: 10.5px;
   }
 }
