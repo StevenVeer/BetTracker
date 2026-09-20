@@ -56,21 +56,22 @@ export const api = {
   backfillTelegram: () => request('/api/telegram/backfill', { method: 'POST' }),
   getLiveScores: () => request('/api/live-scores'),
   getLiveMatchOverlay: () => request('/api/live-scores/open-matches'),
-  linkLiveMatch: (matchId, tsdbLiveId) =>
-    request(`/api/matches/${encodeURIComponent(matchId)}/live-link`, { method: 'PATCH', body: JSON.stringify({ tsdbLiveId }) }),
+  getLiveMatchDetail: (liveId) => request(`/api/live-scores/${encodeURIComponent(liveId)}/detail`),
+  linkLiveMatch: (matchId, liveId) =>
+    request(`/api/matches/${encodeURIComponent(matchId)}/live-link`, { method: 'PATCH', body: JSON.stringify({ liveId }) }),
   linkLegToLiveMatch: (legId, liveMatch) =>
     request(`/api/bet-legs/${encodeURIComponent(legId)}/live-link`, {
       method: 'PATCH',
       body: JSON.stringify({
-        tsdbLiveId: liveMatch.id,
+        liveId: liveMatch.id,
         home: liveMatch.home,
         away: liveMatch.away,
         league: liveMatch.league,
         kickoff: liveMatch.kickoff,
       }),
     }),
-  favoriteMatch: (tsdbId) => request(`/api/favorites/${encodeURIComponent(tsdbId)}`, { method: 'POST' }),
-  unfavoriteMatch: (tsdbId) => request(`/api/favorites/${encodeURIComponent(tsdbId)}`, { method: 'DELETE' }),
+  favoriteMatch: (liveId) => request(`/api/favorites/${encodeURIComponent(liveId)}`, { method: 'POST' }),
+  unfavoriteMatch: (liveId) => request(`/api/favorites/${encodeURIComponent(liveId)}`, { method: 'DELETE' }),
   getPlannedBets: () => request('/api/planned-bets'),
   createPlannedBet: (payload) => request('/api/planned-bets', { method: 'POST', body: JSON.stringify(payload) }),
   deletePlannedBet: (id) => request(`/api/planned-bets/${id}`, { method: 'DELETE' }),

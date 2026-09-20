@@ -29,7 +29,7 @@ const VIEWS = [
 
 // Zelfde interval als het live-tabblad (server/liveScores.js) - overlaadt
 // alleen de weergave van nog open picks met een live score/minuut zodra
-// competitie + teamnamen matchen met de TheSportsDB-feed. Raakt nooit
+// competitie + teamnamen matchen met de ESPN-feed. Raakt nooit
 // bet.status/leg.status of een payout - settlement blijft via de Odds
 // API-knop lopen. Mislukt de match voor een pick, dan blijft die er gewoon
 // zonder live-badge bij staan, precies zoals nu.

@@ -8,6 +8,7 @@ import { teamNamesMatch } from './teamMatch.js';
 import { startTelegramListener, backfillMessages } from './telegramClient.js';
 import { buildReportExport } from './reportGenerator.js';
 import { getLiveScores, startLiveScoresPoller, findLiveMatchFor, findLiveMatchIdFor, getLiveMatchOverlayById, amsterdamDateParts, amsterdamWallTimeToUtcMs, parseKickoffUtc, FINISHED_STATUSES } from './liveScores.js';
+import { getMatchDetail } from './matchDetail.js';
 import { LEAGUES } from './leagues.js';
 import { extractBetsFromImages } from './screenshotImport.js';
 
@@ -1693,7 +1694,11 @@ async function getFavoriteState() {
   for (const row of legRows.rows) {
     let tsdbId = tsdbIdByMatchId.get(row.match_id);
     if (tsdbId === undefined) {
-      tsdbId = row.tsdb_live_id || findLiveMatchIdFor({
+      // Een handmatige koppeling telt alleen als hij naar een ID uit de
+      // huidige bron wijst - oude koppelingen uit de vorige bron (andere
+      // ID-reeks) vallen zo terug op de fuzzy match i.p.v. stil niets te doen.
+      const linked = row.tsdb_live_id && getLiveMatchOverlayById(row.tsdb_live_id) ? row.tsdb_live_id : null;
+      tsdbId = linked || findLiveMatchIdFor({
         home: row.home,
         away: row.away,
         competition: row.competition,
@@ -1710,27 +1715,34 @@ async function getFavoriteState() {
   return { picksByTsdbId, overrideById };
 }
 
+// Favoriet-/pick-velden voor één live wedstrijd - gedeeld door de lijst en de
+// detailpagina zodat beide exact hetzelfde beeld tonen.
+function favoriteFields(m, { picksByTsdbId, overrideById }) {
+  const picks = picksByTsdbId.get(m.id) || null;
+  const override = overrideById.has(m.id) ? overrideById.get(m.id) : null;
+  const favorite = override !== null ? override : Boolean(picks);
+  return {
+    favorite,
+    favoriteSource: !favorite ? null : override !== null ? 'manual' : 'bet',
+    picks,
+    override,
+  };
+}
+
 app.get('/api/live-scores', async (req, res) => {
   const base = getLiveScores();
   try {
-    const { picksByTsdbId, overrideById } = await getFavoriteState();
+    const favoriteState = await getFavoriteState();
     const toPersist = [];
     const matches = base.matches.map((m) => {
-      const picks = picksByTsdbId.get(m.id) || null;
-      const override = overrideById.has(m.id) ? overrideById.get(m.id) : null;
+      const { override, ...fields } = favoriteFields(m, favoriteState);
       // Een favoriet blijft in het Favorieten-blok staan als de wedstrijd is
       // afgelopen, zodat je de eindstand kunt terugzien (tot de retention-
       // cutoff in liveScores.js). Een bet-favoriet verdwijnt zodra de bet
       // settled wordt (geen open leg meer), dus leggen we die vast als
       // override zolang de wedstrijd nog niet is afgelopen.
-      if (override === null && picks && !FINISHED_STATUSES.has(m.status)) toPersist.push(m.id);
-      const favorite = override !== null ? override : Boolean(picks);
-      return {
-        ...m,
-        favorite,
-        favoriteSource: !favorite ? null : override !== null ? 'manual' : 'bet',
-        picks,
-      };
+      if (override === null && fields.picks && !FINISHED_STATUSES.has(m.status)) toPersist.push(m.id);
+      return { ...m, ...fields };
     });
     res.json({ ...base, matches });
     for (const id of toPersist) {
@@ -1745,6 +1757,27 @@ app.get('/api/live-scores', async (req, res) => {
     // Favorieten zijn puur verrijking - een mislukte query mag de rest van
     // het live-overzicht niet blokkeren.
     res.json(base);
+  }
+});
+
+// Detailpagina van een wedstrijd uit het live-overzicht (zie matchDetail.js).
+app.get('/api/live-scores/:id/detail', async (req, res) => {
+  try {
+    const detail = await getMatchDetail(req.params.id);
+    if (!detail) {
+      res.status(404).json({ error: 'Wedstrijd staat niet (meer) in het live-overzicht' });
+      return;
+    }
+    let fields = { favorite: false, favoriteSource: null, picks: null };
+    try {
+      const { override, ...rest } = favoriteFields(detail.match, await getFavoriteState());
+      fields = rest;
+    } catch {
+      // Favorieten/picks zijn verrijking - de statistieken tonen we hoe dan ook.
+    }
+    res.json({ ...detail, match: { ...detail.match, ...fields } });
+  } catch (error) {
+    res.status(502).json({ error: `Kon wedstrijddetails niet ophalen: ${error.message}` });
   }
 });
 
@@ -1779,7 +1812,7 @@ app.delete('/api/favorites/:tsdbId', async (req, res) => {
 });
 
 // Live-overlay voor open picks - matcht elke wedstrijd met een nog open pick
-// op competitie + teamnamen tegen de TheSportsDB-feed (zie findLiveMatchFor).
+// op competitie + teamnamen tegen de ESPN-feed (zie findLiveMatchFor).
 // Puur voor de weergave (ScoreBadge in BetList/OpenBetsModal): settlement
 // blijft volledig via de Odds API-knop lopen, dit wijzigt nooit bet_legs of
 // bets in de database.
@@ -1796,17 +1829,19 @@ app.get('/api/live-scores/open-matches', async (req, res) => {
     // live wedstrijd bij gevonden is (dan gewoon `null`) - zo kan de UI
     // onderscheid maken tussen "gecheckt, niet gevonden" (toon "niet live
     // gevolgd, gebruik de knop") en "nog niet gecheckt" (nog niets tonen).
-    // Een handmatige koppeling (tsdb_live_id) wint altijd van de fuzzy match.
+    // Een handmatige koppeling (tsdb_live_id) wint van de fuzzy match, maar
+    // alleen als hij naar een wedstrijd in de huidige feed wijst (oude ID's
+    // uit de vorige bron vallen terug op fuzzy).
     const matches = {};
     for (const row of rows) {
-      matches[row.id] = row.tsdb_live_id
-        ? getLiveMatchOverlayById(row.tsdb_live_id)
-        : findLiveMatchFor({
-            home: row.home,
-            away: row.away,
-            competition: row.competition,
-            commenceTime: row.commence_time,
-          });
+      matches[row.id] =
+        (row.tsdb_live_id && getLiveMatchOverlayById(row.tsdb_live_id)) ||
+        findLiveMatchFor({
+          home: row.home,
+          away: row.away,
+          competition: row.competition,
+          commenceTime: row.commence_time,
+        });
     }
     const feed = getLiveScores();
     res.json({ matches, updatedAt: new Date().toISOString(), feedUpdatedAt: feed.updatedAt, feedError: feed.error });
@@ -1817,12 +1852,12 @@ app.get('/api/live-scores/open-matches', async (req, res) => {
 
 // Handmatige koppeling met een live wedstrijd (zie ScoreBadge/LiveLinkPicker
 // in src/components/BetList.jsx) - voor als de automatische fuzzy-match op
-// team-/competitienaam een keer misgrijpt. tsdbLiveId: null ontkoppelt weer
+// team-/competitienaam een keer misgrijpt. liveId: null ontkoppelt weer
 // (valt terug op automatisch matchen).
 app.patch('/api/matches/:id/live-link', async (req, res) => {
-  const { tsdbLiveId } = req.body;
+  const { liveId } = req.body;
   try {
-    const { rowCount } = await pool.query('update matches set tsdb_live_id = $1 where id = $2', [tsdbLiveId || null, req.params.id]);
+    const { rowCount } = await pool.query('update matches set tsdb_live_id = $1 where id = $2', [liveId || null, req.params.id]);
     if (rowCount === 0) {
       res.status(404).json({ error: 'Wedstrijd niet gevonden' });
       return;
@@ -1844,13 +1879,13 @@ const MANUAL_MATCH_SPORT_KEY = 'manual';
 // Handmatig ingevoerde selecties (vrije teamnamen, geen match_id - zie
 // upsertMatch/POST /api/bets hierboven) hebben nog geen matches-rij om aan
 // een live wedstrijd te koppelen. Deze route maakt er op het moment van
-// koppelen alsnog één aan (id = manual:<tsdbLiveId>, zodat meerdere manuele
+// koppelen alsnog één aan (id = manual:<liveId>, zodat meerdere manuele
 // legs die naar dezelfde live wedstrijd wijzen 'm delen, net als upsertMatch
 // voor echte Odds API-matches doet) en zet bet_legs.match_id ernaar. Heeft de
 // leg al een match_id (dus een gewone Odds API-wedstrijd), dan gedraagt dit
 // zich identiek aan PATCH /api/matches/:id/live-link hierboven.
 app.patch('/api/bet-legs/:id/live-link', async (req, res) => {
-  const { tsdbLiveId, home, away, league, kickoff } = req.body;
+  const { liveId, home, away, league, kickoff } = req.body;
   try {
     const { rows } = await pool.query('select match_id from bet_legs where id = $1', [req.params.id]);
     const leg = rows[0];
@@ -1860,16 +1895,16 @@ app.patch('/api/bet-legs/:id/live-link', async (req, res) => {
     }
 
     if (leg.match_id) {
-      await pool.query('update matches set tsdb_live_id = $1 where id = $2', [tsdbLiveId || null, leg.match_id]);
+      await pool.query('update matches set tsdb_live_id = $1 where id = $2', [liveId || null, leg.match_id]);
       res.status(204).end();
       return;
     }
 
-    if (!tsdbLiveId || !home || !away) {
-      res.status(400).json({ error: 'tsdbLiveId, home en away zijn verplicht om een handmatige selectie te koppelen' });
+    if (!liveId || !home || !away) {
+      res.status(400).json({ error: 'liveId, home en away zijn verplicht om een handmatige selectie te koppelen' });
       return;
     }
-    const matchId = `manual:${tsdbLiveId}`;
+    const matchId = `manual:${liveId}`;
     const commenceTime = kickoff ? parseKickoffUtc(kickoff) : new Date();
     await pool.query(
       `insert into matches (id, sport_key, competition, home, away, commence_time, tsdb_live_id)
@@ -1880,7 +1915,7 @@ app.patch('/api/bet-legs/:id/live-link', async (req, res) => {
          away = excluded.away,
          commence_time = excluded.commence_time,
          tsdb_live_id = excluded.tsdb_live_id`,
-      [matchId, MANUAL_MATCH_SPORT_KEY, league || null, home, away, commenceTime, tsdbLiveId]
+      [matchId, MANUAL_MATCH_SPORT_KEY, league || null, home, away, commenceTime, liveId]
     );
     await pool.query('update bet_legs set match_id = $1 where id = $2', [matchId, req.params.id]);
     res.status(204).end();

@@ -31,6 +31,10 @@ export function ensureSchema() {
         last_score_sync_at timestamptz,
         tsdb_live_id text
       );
+      -- Historische kolomnaam: bevat sinds de overstap naar ESPN het ESPN-
+      -- event-ID (net als favorite_matches.tsdb_live_id hieronder). Oude
+      -- TheSportsDB-ID's blijven staan maar matchen niets meer en worden
+      -- genegeerd; hernoemen zou een niet-additieve migratie zijn.
       alter table matches add column if not exists tsdb_live_id text;
 
       -- Een bet is een "slip": één of meer selecties (bet_legs). Een single

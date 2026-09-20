@@ -8,7 +8,7 @@ Frontend: React + Vite. Backend: Express + Postgres. Alles draait lokaal via Doc
 
 - **Bets** – invoeren (wedstrijd, markt, odds, inzet; ook combi's met meerdere legs), filteren op status en bron, handmatig settelen.
 - **Automatische settlement** – op aanvraag haalt de server scores op bij The Odds API en settelt de markten `1x2`, `dubbelkans`, `btts` en `over_under`. Andere markten (bv. `anders`) blijven open voor handmatige settlement.
-- **Live scores** – los overzicht van lopende wedstrijden via TheSportsDB (gratis), met favorieten en een handmatige koppeling van een wedstrijd aan een live-ID als de automatische match misgrijpt.
+- **Live scores** – los overzicht van lopende wedstrijden via ESPN's publieke scoreboard-API (gratis, geen key, wel onofficieel), met favorieten en een handmatige koppeling van een wedstrijd aan een live-ID als de automatische match misgrijpt. Klik op een wedstrijd voor een detailpagina met statistieken (balbezit, schoten, corners, passes, kaarten), tijdlijn, opstellingen en een afgeleide druk-grafiek. Pressure, big chances, xG en een shotmap leveren gratis bronnen niet.
 - **Geplande bets** – opzetjes zonder inzet; "plaatsen" maakt er een echte bet van.
 - **Screenshot-import** – bets uit screenshots van een bookmaker-app halen via de Anthropic API. Het resultaat is alleen een voorstel: je bewerkt en bevestigt het voordat er iets wordt opgeslagen.
 - **Telegram-import** – leest live mee in één Telegram-groep, parset picks (incl. parlays) en toont ze ter vergelijking met je eigen bets. Optioneel: zonder Telegram-config draait de rest gewoon.
@@ -103,7 +103,8 @@ server/
   index.js                   – Express-API: bets, ledger, rapporten, scores, live-koppelingen
   db.js                      – Postgres-pool en schema (ensureSchema)
   leagues.js                 – gedeelde competitielijst
-  liveScores.js              – TheSportsDB-poller voor het live-overzicht
+  liveScores.js              – ESPN-poller voor het live-overzicht
+  matchDetail.js             – ESPN-detailpagina: statistieken, tijdlijn, opstellingen, druk
   teamMatch.js               – fuzzy teamnaam-matching
   screenshotImport.js        – screenshot → bets via de Anthropic API
   telegramClient.js          – luistert mee in de Telegram-groep
@@ -122,7 +123,7 @@ Het schema staat in `server/db.js` en wordt bij het opstarten van de API automat
 
 Via de knop "Live scores ophalen" haalt de server op aanvraag scores op bij The Odds API (`/scores`) voor alle sporten met open bets op wedstrijden die al zijn afgetrapt, en settelt automatisch wat uit de eindstand af te leiden is. De knop toont het huidige verbruik (`gebruikt/totaal` credits in de lopende periode), zodat je zelf bepaalt wanneer een call het waard is.
 
-Er is geen achtergrond-poller voor de Odds API: dat kostte credits ook als er niemand keek. Alleen het live-overzicht heeft een poller, en die gebruikt TheSportsDB, dat gratis is en geen quotum heeft (bij een 429 pauzeert hij een paar cycli).
+Er is geen achtergrond-poller voor de Odds API: dat kostte credits ook als er niemand keek. Alleen het live-overzicht heeft een poller, en die gebruikt ESPN, dat gratis is en geen key of quotum heeft (bij een 429 of 403 pauzeert hij een paar cycli). Het is een onofficiële API: als ESPN iets wijzigt valt alleen de live-tab uit, bets en settlement blijven werken. Het detail-endpoint haalt alleen data op zolang iemand een detailpagina open heeft (15 s server-cache).
 
 ## Rapporten
 

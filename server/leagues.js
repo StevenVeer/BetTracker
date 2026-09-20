@@ -1,6 +1,6 @@
 // Gedeelde competitie-lijst - zowel de wedstrijden-proxy (dropdown in het
 // bet-formulier, via de Odds API) als het live-scores overzicht (via
-// TheSportsDB, zie liveScores.js) gebruiken dezelfde competities in dezelfde
+// ESPN, zie liveScores.js) gebruiken dezelfde competities in dezelfde
 // tier-volgorde (top eerst), zodat "live" precies toont wat ook in de
 // dropdown staat.
 export const LEAGUES = [

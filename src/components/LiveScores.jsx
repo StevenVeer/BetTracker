@@ -1,33 +1,11 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { describeBet, MARKET_ABBR } from '../markets.js';
+import MatchDetail from './MatchDetail.jsx';
+import { FavoriteButton, IN_PLAY_STATUSES, PickLines, StarIcon, openProps, statusLabel } from './liveShared.jsx';
 
 // Zelfde interval als de server-side poll (zie server/liveScores.js) - vaker
 // pollen heeft geen zin, de data zelf ververst niet sneller.
 const POLL_MS = 20000;
-
-const IN_PLAY_STATUSES = new Set(['1H', '2H', 'ET', 'ET1', 'ET2']);
-
-const STATUS_LABELS = {
-  NS: 'Nog niet begonnen',
-  '1H': '1e helft',
-  HT: 'Rust',
-  '2H': '2e helft',
-  ET: 'Verlenging',
-  FT: 'Afgelopen',
-  AET: 'Afgelopen (n.v.)',
-  PEN: "Penalty's",
-  POST: 'Uitgesteld',
-  CANC: 'Afgelast',
-};
-
-function statusLabel(status) {
-  return STATUS_LABELS[status] || status || '';
-}
-
-function pickLabel(pick, match) {
-  return describeBet({ market: pick.market, selection: pick.selection, line: pick.line, match });
-}
 
 // De server levert de wedstrijden al gefilterd op de eigen competitielijst
 // en gesorteerd in dezelfde volgorde als de dropdown (top-competities
@@ -46,52 +24,10 @@ function groupByLeague(matches) {
   return groups;
 }
 
-function StarIcon({ filled }) {
-  return (
-    <svg viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke={filled ? 'none' : 'currentColor'} strokeWidth="1.6">
-      <path d="M12 2.5l2.9 6.3 6.9.7-5.2 4.7 1.6 6.8L12 17.6 5.8 21l1.6-6.8-5.2-4.7 6.9-.7z" />
-    </svg>
-  );
-}
-
-function FavoriteButton({ match, onToggle }) {
-  const label =
-    match.favoriteSource === 'bet'
-      ? 'Favoriet door een actieve bet — klik om te verwijderen'
-      : match.favorite
-        ? 'Favoriet verwijderen'
-        : 'Markeer als favoriet';
-  return (
-    <button
-      type="button"
-      className={`star-btn${match.favorite ? ' is-fav' : ''}`}
-      title={label}
-      aria-label={label}
-      onClick={() => onToggle(match)}
-    >
-      <StarIcon filled={match.favorite} />
-    </button>
-  );
-}
-
-function PickLines({ picks, match }) {
-  if (!picks || picks.length === 0) return null;
-  return (
-    <div className="pick-lines">
-      {picks.map((p, i) => (
-        <div className="pick-line" key={i}>
-          <span className="market">{MARKET_ABBR[p.market] || p.market}</span>
-          {pickLabel(p, match)}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function MatchRow({ match: m, onToggleFavorite }) {
+function MatchRow({ match: m, onToggleFavorite, onOpen }) {
   const live = IN_PLAY_STATUSES.has(m.status);
   return (
-    <div className={`live-match-row${m.favorite ? ' is-fav' : ''}`}>
+    <div className={`live-match-row is-clickable${m.favorite ? ' is-fav' : ''}`} {...openProps(() => onOpen(m))}>
       <div className="live-match-teams">
         <span className="live-match-team">{m.home}</span>
         <span className="live-match-score">
@@ -116,18 +52,18 @@ function MatchRow({ match: m, onToggleFavorite }) {
 // volledige kaartje staat al in het Favorieten-blok bovenaan (zie
 // FavoriteCard), dubbel tonen zou weer precies het gedrang-probleem
 // terugbrengen dat dit blok juist oplost.
-function GhostRow({ match: m }) {
+function GhostRow({ match: m, onOpen }) {
   return (
-    <div className="ghost-row">
+    <div className="ghost-row is-clickable" {...openProps(() => onOpen(m))}>
       ★ {m.home} – {m.away} staat hierboven bij Favorieten
     </div>
   );
 }
 
-function FavoriteCard({ match: m, onToggleFavorite }) {
+function FavoriteCard({ match: m, onToggleFavorite, onOpen }) {
   const live = IN_PLAY_STATUSES.has(m.status);
   return (
-    <div className="fav-card">
+    <div className="fav-card is-clickable" {...openProps(() => onOpen(m))}>
       <div className="fav-card-top">
         {live ? (
           <span className="fav-card-badge is-live">
@@ -157,6 +93,7 @@ function FavoriteCard({ match: m, onToggleFavorite }) {
 export default function LiveScores() {
   const [state, setState] = useState({ matches: [], updatedAt: null, error: null });
   const [loading, setLoading] = useState(true);
+  const [openId, setOpenId] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -201,6 +138,12 @@ export default function LiveScores() {
     }
   }
 
+  const openMatch = openId ? state.matches.find((m) => m.id === openId) : null;
+  if (openMatch) {
+    return <MatchDetail listMatch={openMatch} onBack={() => setOpenId(null)} onToggleFavorite={toggleFavorite} />;
+  }
+
+  const open = (m) => setOpenId(m.id);
   const favorites = state.matches.filter((m) => m.favorite);
   const groups = groupByLeague(state.matches);
 
@@ -230,7 +173,7 @@ export default function LiveScores() {
               </div>
               <div className="fav-grid">
                 {favorites.map((m) => (
-                  <FavoriteCard key={m.id} match={m} onToggleFavorite={toggleFavorite} />
+                  <FavoriteCard key={m.id} match={m} onToggleFavorite={toggleFavorite} onOpen={open} />
                 ))}
               </div>
               <div className="fav-divider" />
@@ -244,9 +187,9 @@ export default function LiveScores() {
                 <div className="live-match-list">
                   {group.matches.map((m) =>
                     m.favorite ? (
-                      <GhostRow key={m.id} match={m} />
+                      <GhostRow key={m.id} match={m} onOpen={open} />
                     ) : (
-                      <MatchRow key={m.id} match={m} onToggleFavorite={toggleFavorite} />
+                      <MatchRow key={m.id} match={m} onToggleFavorite={toggleFavorite} onOpen={open} />
                     )
                   )}
                 </div>
