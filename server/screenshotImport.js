@@ -22,7 +22,7 @@ const EXTRACT_TOOL = {
             stake: { type: ['number', 'null'], description: 'Inzet in euro.' },
             odds: { type: ['number', 'null'], description: 'Totale odds (bij een combi de gecombineerde odds; bij een single de odds van de selectie).' },
             status: { type: 'string', enum: ['open', 'won', 'lost', 'void', 'cashed_out'], description: 'open als nog niet afgehandeld.' },
-            payout: { type: ['number', 'null'], description: 'Werkelijke uitbetaling of cash-out bedrag in euro, alleen als zichtbaar. Anders null.' },
+            payout: { type: ['number', 'null'], description: 'Totaal uitbetaalbedrag in euro INCLUSIEF inzet: bij een open bet de mogelijke uitbetaling/potentiële winst ("Mogelijke uitbetaling", "Potential payout", "Te winnen", het bedrag achter een pijl → of het totaalbedrag onder de odds), bij een gewonnen bet de werkelijke uitbetaling, bij cash-out het cash-out bedrag. Is alleen de winst zonder inzet zichtbaar, tel de inzet erbij op. Anders null (ook bij een verloren bet).' },
             placedAt: { type: ['string', 'null'], description: 'Moment van plaatsen als ISO 8601 datum(-tijd) inclusief jaar, alleen als zichtbaar. Anders null.' },
             settledAt: { type: ['string', 'null'], description: 'Moment van afhandeling als ISO 8601, alleen als zichtbaar. Anders null.' },
             legs: {
@@ -51,6 +51,7 @@ const SYSTEM_PROMPT = `Je leest screenshots van weddenschappen bij (Nederlandse)
 - Elke bet slip is één bet; een combi heeft meerdere legs, een single precies één.
 - Verzin niets: als een waarde niet zichtbaar is, geef je null. Gok geen bookmaker.
 - Staat dezelfde bet op meerdere screenshots (overlap), registreer hem dan één keer.
+- Vul payout altijd in zodra er een uitbetaal-/te-winnen-bedrag zichtbaar is, ook bij een bet die nog open staat.
 - Lees bedragen en odds exact over (decimale odds, punt als scheidingsteken).
 - De huidige datum is ${new Date().toISOString().slice(0, 10)}; gebruik die om een jaar af te leiden als alleen dag/maand zichtbaar is.
 Roep altijd de tool register_bets aan.`;

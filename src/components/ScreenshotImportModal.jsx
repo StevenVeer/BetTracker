@@ -50,7 +50,14 @@ function toDraft(bet, bookmakers) {
     duplicate: Boolean(bet.duplicateOf),
     bookmaker: match || '',
     stake: bet.stake != null ? String(bet.stake) : '',
-    odds: bet.odds != null ? String(bet.odds) : '',
+    // Ontbreken de totale odds maar zijn inzet en uitbetaling wel zichtbaar,
+    // dan volgen de odds daaruit.
+    odds:
+      bet.odds != null
+        ? String(bet.odds)
+        : bet.stake > 0 && bet.payout > 0
+          ? String(Math.round((bet.payout / bet.stake) * 100) / 100)
+          : '',
     status: bet.status || 'open',
     payout: bet.payout != null ? String(bet.payout) : '',
     placedAt: toLocalInput(bet.placedAt),
@@ -164,6 +171,8 @@ export default function ScreenshotImportModal({ onClose, onCreated }) {
           bookmaker: draft.bookmaker,
           stake: Number(draft.stake),
           odds: totalOdds,
+          // Bij verloren/void geen override: de uitbetaling is dan niet relevant.
+          potentialPayout: draft.payout !== '' && !['lost', 'void'].includes(draft.status) ? Number(draft.payout) : undefined,
           placedAt: draft.placedAt ? new Date(draft.placedAt).toISOString() : undefined,
           legs: draft.legs.map((leg) => ({
             match: null,
@@ -176,7 +185,6 @@ export default function ScreenshotImportModal({ onClose, onCreated }) {
         let final = bet;
         if (draft.status !== 'open') {
           const patch = { status: draft.status };
-          if (draft.payout !== '') patch.potentialPayout = Number(draft.payout);
           if (draft.settledAt) patch.settledAt = draft.settledAt;
           final = await api.updateBet(bet.id, patch);
         }
@@ -314,10 +322,17 @@ export default function ScreenshotImportModal({ onClose, onCreated }) {
                           ))}
                         </select>
                       </label>
-                      {(draft.status === 'won' || draft.status === 'cashed_out') && (
+                      {draft.status !== 'lost' && draft.status !== 'void' && (
                         <label className="field">
-                          <span>Uitbetaling (€)</span>
-                          <input type="number" step="0.01" min="0" value={draft.payout} onChange={(e) => updateDraft(i, { payout: e.target.value })} />
+                          <span>{draft.status === 'open' ? 'Mogelijke uitbetaling (€)' : 'Uitbetaling (€)'}</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder={Number(draft.stake) > 0 && Number(draft.odds) > 0 ? (Number(draft.stake) * Number(draft.odds)).toFixed(2) : ''}
+                            value={draft.payout}
+                            onChange={(e) => updateDraft(i, { payout: e.target.value })}
+                          />
                         </label>
                       )}
                       <label className="field">

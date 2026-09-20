@@ -301,7 +301,7 @@ app.get('/api/bets', async (req, res) => {
 });
 
 app.post('/api/bets', async (req, res) => {
-  const { bookmaker, stake, placedAt, notes, legs, odds } = req.body;
+  const { bookmaker, stake, placedAt, notes, legs, odds, potentialPayout: payoutInput } = req.body;
   if (!bookmaker || !stake || !Array.isArray(legs) || legs.length === 0) {
     res.status(400).json({ error: 'bookmaker, stake en minstens 1 selectie zijn verplicht' });
     return;
@@ -323,7 +323,9 @@ app.post('/api/bets', async (req, res) => {
     // kan een bet boost (hogere odds dan de rekenkundige combinatie) worden
     // vastgelegd, zowel bij combi's als bij singles.
     const combinedOdds = odds ? Number(odds) : legs.reduce((acc, leg) => acc * Number(leg.odds), 1);
-    const potentialPayout = combinedOdds * Number(stake);
+    // Een expliciet meegegeven uitbetaling (bv. uit een screenshot) wint van
+    // odds × inzet, want bookmakers ronden soms net anders af.
+    const potentialPayout = payoutInput > 0 ? Number(payoutInput) : combinedOdds * Number(stake);
     const id = randomUUID();
 
     await pool.query(

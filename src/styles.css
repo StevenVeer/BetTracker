@@ -706,7 +706,8 @@ body {
 
 .field input,
 .field select,
-.field textarea {
+.field textarea,
+.import-leg input {
   font-family: 'Space Mono', ui-monospace, SFMono-Regular, monospace;
   font-size: 13px;
   padding: 10px 11px;
@@ -731,7 +732,8 @@ body {
 }
 .field input:focus,
 .field select:focus,
-.field textarea:focus {
+.field textarea:focus,
+.import-leg input:focus {
   outline: none;
   border-color: var(--gold);
 }
@@ -3182,6 +3184,14 @@ body {
   grid-template-columns: 1fr 1fr 1.4fr 80px;
   gap: 8px;
   margin-top: 6px;
+}
+.import-leg input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+.import-leg input::placeholder {
+  color: rgba(244, 242, 232, 0.35);
 }
 .import-actions {
   display: flex;
