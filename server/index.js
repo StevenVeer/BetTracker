@@ -226,6 +226,7 @@ function serializeLeg(row) {
     odds: Number(row.odds),
     status: row.status,
     manualLabel: row.manual_label,
+    kickoffAt: row.kickoff_at || null,
     match: row.match_id
       ? {
           id: row.match_id,
@@ -337,10 +338,11 @@ app.post('/api/bets', async (req, res) => {
     let position = 0;
     for (const leg of legs) {
       const matchId = await upsertMatch(leg.match);
+      const kickoffAt = !matchId && leg.kickoffAt && !Number.isNaN(new Date(leg.kickoffAt).getTime()) ? new Date(leg.kickoffAt) : null;
       await pool.query(
-        `insert into bet_legs (id, bet_id, position, match_id, manual_label, market, selection, line, odds, status)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open')`,
-        [randomUUID(), id, position, matchId, matchId ? null : leg.manualLabel, leg.market, leg.selection, leg.line ?? null, leg.odds]
+        `insert into bet_legs (id, bet_id, position, match_id, manual_label, market, selection, line, odds, status, kickoff_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open', $10)`,
+        [randomUUID(), id, position, matchId, matchId ? null : leg.manualLabel, leg.market, leg.selection, leg.line ?? null, leg.odds, kickoffAt]
       );
       position += 1;
     }
@@ -381,6 +383,31 @@ app.post('/api/bets/import-screenshot', async (req, res) => {
   }
 });
 
+// settled_at = wanneer de bookmaker de bet afhandelde, niet wanneer jij 'm in
+// de app afrondt. Rond je een bet pas later af (bv. nadat je van die winst al
+// nieuwe bets hebt geplaatst en via screenshot-import ingevoerd), dan stond de
+// winst in het bookmaker-journaal te laat en vulde dat het "tekort" aan als
+// nep-storting vanaf ING. Daarom: het einde van de laatste wedstrijd van de
+// slip (aftrap + MATCH_DURATION_MS), nooit later dan nu en nooit vóór het
+// plaatsen. Heeft een leg geen bekende aftrap, dan blijft het nu.
+const MATCH_DURATION_MS = 2 * 60 * 60 * 1000;
+
+async function estimateSettledAt(betId) {
+  const now = Date.now();
+  const { rows } = await pool.query(
+    `select b.placed_at, coalesce(m.commence_time, l.kickoff_at) as kickoff
+     from bets b
+     join bet_legs l on l.bet_id = b.id
+     left join matches m on m.id = l.match_id
+     where b.id = $1`,
+    [betId]
+  );
+  if (rows.length === 0 || rows.some((row) => !row.kickoff)) return new Date(now);
+  const lastEnd = Math.max(...rows.map((row) => new Date(row.kickoff).getTime())) + MATCH_DURATION_MS;
+  const placedAt = new Date(rows[0].placed_at).getTime();
+  return new Date(Math.min(now, Math.max(lastEnd, placedAt)));
+}
+
 const EDITABLE_BET_FIELDS = ['bookmaker', 'stake', 'odds', 'notes'];
 const SETTLE_STATUSES = ['open', 'won', 'lost', 'void', 'cashed_out'];
 
@@ -416,7 +443,7 @@ app.patch('/api/bets/:id', async (req, res) => {
         return;
       }
       updates.status = req.body.status;
-      updates.settled_at = req.body.status === 'open' ? null : new Date();
+      updates.settled_at = req.body.status === 'open' ? null : await estimateSettledAt(id);
     }
     // placedAt achteraf corrigeren (bv. een bet die 's avonds laat is
     // geplaatst maar bij de vorige dag hoort) - los van EDITABLE_BET_FIELDS
@@ -430,7 +457,7 @@ app.patch('/api/bets/:id', async (req, res) => {
       updates.placed_at = nextPlacedAt;
     }
     // settledAt achteraf corrigeren - staat los van de automatische
-    // settled_at = now() hierboven (die wint dus niet als dit veld in
+    // settled_at-schatting hierboven (die wint dus niet als dit veld in
     // dezelfde request wordt meegegeven). Nodig omdat het bookmaker-journaal
     // winst/void chronologisch op settledAt plaatst: een bet die je laat
     // afrondt, ook al was 'm allang gewonnen, duwt zijn winst-boeking dan te
@@ -1555,7 +1582,7 @@ async function reevaluateBet(betId) {
   const { rows: legs } = await pool.query('select * from bet_legs where bet_id = $1', [betId]);
 
   if (legs.some((leg) => leg.status === 'lost')) {
-    await pool.query('update bets set status = $1, settled_at = now() where id = $2', ['lost', betId]);
+    await pool.query('update bets set status = $1, settled_at = $3 where id = $2', ['lost', betId, await estimateSettledAt(betId)]);
     return;
   }
 
@@ -1565,7 +1592,7 @@ async function reevaluateBet(betId) {
   const wonLegs = legs.filter((leg) => leg.status === 'won');
   if (wonLegs.length === 0) {
     // alle legs void (bv. alle wedstrijden afgelast) → hele inzet terug
-    await pool.query('update bets set status = $1, settled_at = now() where id = $2', ['void', betId]);
+    await pool.query('update bets set status = $1, settled_at = $3 where id = $2', ['void', betId, await estimateSettledAt(betId)]);
     return;
   }
   const voidLegs = legs.filter((leg) => leg.status === 'void');
@@ -1574,7 +1601,7 @@ async function reevaluateBet(betId) {
     // zoals ze zijn vastgelegd — inclusief een eventuele bet boost of een
     // handmatige payout-correctie (een bookmaker rondt soms net anders af
     // dan pure odds × inzet). Niets om te herberekenen.
-    await pool.query('update bets set status = $1, settled_at = now() where id = $2', ['won', betId]);
+    await pool.query('update bets set status = $1, settled_at = $3 where id = $2', ['won', betId, await estimateSettledAt(betId)]);
     return;
   }
   // Wél een void leg: diens eigen odds delen we uit de totale odds (alsof
@@ -1586,8 +1613,8 @@ async function reevaluateBet(betId) {
   const effectiveOdds = Number(bet.odds) / voidFactor;
   const payout = effectiveOdds * Number(bet.stake);
   await pool.query(
-    'update bets set status = $1, odds = $2, potential_payout = $3, settled_at = now() where id = $4',
-    ['won', effectiveOdds, payout, betId]
+    'update bets set status = $1, odds = $2, potential_payout = $3, settled_at = $5 where id = $4',
+    ['won', effectiveOdds, payout, betId, await estimateSettledAt(betId)]
   );
 }
 

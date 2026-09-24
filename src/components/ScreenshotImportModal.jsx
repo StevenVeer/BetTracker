@@ -67,6 +67,7 @@ function toDraft(bet, bookmakers) {
       away: leg.away || '',
       selection: leg.selection || '',
       odds: leg.odds != null ? String(leg.odds) : '',
+      kickoffAt: toLocalInput(leg.kickoffAt),
     })),
   };
 }
@@ -180,6 +181,8 @@ export default function ScreenshotImportModal({ onClose, onCreated }) {
             market: 'anders',
             selection: leg.selection.trim(),
             odds: Number(leg.odds),
+            // Aftrap bepaalt de geschatte afhandeltijd (einde laatste wedstrijd).
+            kickoffAt: leg.kickoffAt ? new Date(leg.kickoffAt).toISOString() : undefined,
           })),
         });
         let final = bet;
@@ -353,6 +356,12 @@ export default function ScreenshotImportModal({ onClose, onCreated }) {
                           placeholder="Odds"
                           value={leg.odds}
                           onChange={(e) => updateLeg(i, j, { odds: e.target.value })}
+                        />
+                        <input
+                          type="datetime-local"
+                          title="Aftrap"
+                          value={leg.kickoffAt}
+                          onChange={(e) => updateLeg(i, j, { kickoffAt: e.target.value })}
                         />
                       </div>
                     ))}

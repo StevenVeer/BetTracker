@@ -3198,7 +3198,7 @@ body {
 }
 .import-leg {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.4fr 80px;
+  grid-template-columns: 1fr 1fr 1.4fr 80px 190px;
   gap: 8px;
   margin-top: 6px;
 }

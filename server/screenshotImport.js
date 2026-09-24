@@ -34,6 +34,7 @@ const EXTRACT_TOOL = {
                   away: { type: ['string', 'null'], description: 'Uitteam/speler 2.' },
                   selection: { type: 'string', description: 'De gekozen uitkomst in het Nederlands, kort, bv. "Ajax wint", "Over 2.5 doelpunten", "Beide teams scoren: Ja", "Feyenoord of gelijk".' },
                   odds: { type: ['number', 'null'], description: 'Odds van deze selectie.' },
+                  kickoffAt: { type: ['string', 'null'], description: 'Aftrap (datum + tijd) van deze wedstrijd als lokale Nederlandse tijd "YYYY-MM-DDTHH:mm" zonder tijdzone, alleen als zichtbaar op de slip. Anders null.' },
                 },
                 required: ['selection'],
               },

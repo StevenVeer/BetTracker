@@ -66,6 +66,10 @@ export function ensureSchema() {
         odds numeric not null,
         status text not null default 'open'
       );
+      -- Aftraptijd van een handmatige leg (zonder gekoppelde wedstrijd), bv.
+      -- uitgelezen van een screenshot. Gebruikt om settled_at te schatten
+      -- (zie estimateSettledAt in index.js).
+      alter table bet_legs add column if not exists kickoff_at timestamptz;
 
       create table if not exists bookmaker_withdrawals (
         id text primary key,
