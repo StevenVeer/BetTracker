@@ -51,6 +51,11 @@ const ESPN_LEAGUE_IDS = {
   soccer_fifa_world_cup: '606',
   soccer_uefa_european_championship: '781',
   soccer_uefa_nations_league: '2395',
+  soccer_africa_cup_of_nations: '3908',
+  soccer_africa_cup_of_nations_qual: '8315',
+  soccer_concacaf_gold_cup: '4004',
+  soccer_concacaf_gold_cup_qual: '19778',
+  soccer_concacaf_nations_league: '19267',
 };
 
 // ESPN-ID -> { index, name } - index bepaalt de volgorde (dezelfde tier-

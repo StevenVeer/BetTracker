@@ -109,8 +109,10 @@ export default function App() {
   const { visible: amountsVisible, setVisible: setAmountsVisible } = useAmountsVisible();
   useSettlementNotifications(bets, telegramBets, notifEnabled);
 
+  // `loading` start op true en gaat alleen na de eerste load uit - latere
+  // reloads (na een live-koppeling of scores ophalen) verversen stil, anders
+  // unmount BetList even voor "Laden…" en springt de pagina terug naar boven.
   function loadBets() {
-    setLoading(true);
     api
       .getBets('all', 'manual')
       .then(setBets)

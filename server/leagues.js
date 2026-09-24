@@ -34,4 +34,10 @@ export const LEAGUES = [
   { key: 'soccer_fifa_world_cup', name: 'WK', country: 'International', tier: 'other' },
   { key: 'soccer_uefa_european_championship', name: 'EK', country: 'International', tier: 'other' },
   { key: 'soccer_uefa_nations_league', name: 'UEFA Nations League', country: 'International', tier: 'other' },
+  { key: 'soccer_africa_cup_of_nations', name: 'Afrika Cup', country: 'International', tier: 'other' },
+  // liveOnly: geen Odds API-competitie; alleen via ESPN (live-tab), dus niet in de dropdown.
+  { key: 'soccer_africa_cup_of_nations_qual', name: 'Afrika Cup kwalificatie', country: 'International', tier: 'other', liveOnly: true },
+  { key: 'soccer_concacaf_gold_cup', name: 'Gold Cup', country: 'International', tier: 'other' },
+  { key: 'soccer_concacaf_gold_cup_qual', name: 'Gold Cup kwalificatie', country: 'International', tier: 'other', liveOnly: true },
+  { key: 'soccer_concacaf_nations_league', name: 'CONCACAF Nations League', country: 'International', tier: 'other', liveOnly: true },
 ];

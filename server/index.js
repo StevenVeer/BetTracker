@@ -101,6 +101,7 @@ async function getMatchesForDate(date) {
   const bounds = dateBounds(date);
   const results = [];
   for (const league of LEAGUES) {
+    if (league.liveOnly) continue;
     try {
       const query = `?commenceTimeFrom=${encodeURIComponent(bounds.from)}&commenceTimeTo=${encodeURIComponent(bounds.to)}`;
       const events = await oddsApiRequest(`/sports/${league.key}/events${query}`);
@@ -111,7 +112,7 @@ async function getMatchesForDate(date) {
   }
   const value = {
     matches: results.flat().sort((a, b) => new Date(a.commenceTime) - new Date(b.commenceTime)),
-    leagues: LEAGUES.map(({ key, ...league }) => ({ id: key, ...league })),
+    leagues: LEAGUES.filter((league) => !league.liveOnly).map(({ key, liveOnly, ...league }) => ({ id: key, ...league })),
   };
   matchesCache.set(date, { value, expiresAt: Date.now() + MATCH_CACHE_MS });
   return value;
