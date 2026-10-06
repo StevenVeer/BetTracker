@@ -2,3 +2,5 @@ node_modules
 dist
 .env
 design-canvas/
+extension.crx
+extension.pem

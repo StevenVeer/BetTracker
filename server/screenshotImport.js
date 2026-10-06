@@ -23,8 +23,10 @@ const EXTRACT_TOOL = {
             odds: { type: ['number', 'null'], description: 'Totale odds (bij een combi de gecombineerde odds; bij een single de odds van de selectie).' },
             status: { type: 'string', enum: ['open', 'won', 'lost', 'void', 'cashed_out'], description: 'open als nog niet afgehandeld.' },
             payout: { type: ['number', 'null'], description: 'Totaal uitbetaalbedrag in euro INCLUSIEF inzet: bij een open bet de mogelijke uitbetaling/potentiële winst ("Mogelijke uitbetaling", "Potential payout", "Te winnen", het bedrag achter een pijl → of het totaalbedrag onder de odds), bij een gewonnen bet de werkelijke uitbetaling, bij cash-out het cash-out bedrag. Is alleen de winst zonder inzet zichtbaar, tel de inzet erbij op. Anders null (ook bij een verloren bet).' },
-            placedAt: { type: ['string', 'null'], description: 'Moment van plaatsen als ISO 8601 datum(-tijd) inclusief jaar, alleen als zichtbaar. Anders null.' },
-            settledAt: { type: ['string', 'null'], description: 'Moment van afhandeling als ISO 8601, alleen als zichtbaar. Anders null.' },
+            placedAt: { type: ['string', 'null'], description: 'Moment van plaatsen als lokale Nederlandse tijd "YYYY-MM-DDTHH:mm" zonder tijdzone, inclusief jaar en altijd met de tijd als die zichtbaar is (bv. "3 Okt 2026 • 16:00" → "2026-10-03T16:00"). Alleen als zichtbaar, anders null.' },
+            settledAt: { type: ['string', 'null'], description: 'Moment van afhandeling als lokale Nederlandse tijd "YYYY-MM-DDTHH:mm" zonder tijdzone, alleen als expliciet zichtbaar (niet de aftrap). Anders null.' },
+            couponId: { type: ['string', 'null'], description: 'Coupon-/ticket-/referentienummer van de bet, alleen als zichtbaar. Anders null.' },
+            note: { type: ['string', 'null'], description: 'Korte opmerking alleen als iets afgeleid of onzeker is (bv. "odds leg 3 afgeleid uit totaal", "boost: odds per leg niet zichtbaar"). Anders null.' },
             legs: {
               type: 'array',
               items: {
@@ -32,7 +34,7 @@ const EXTRACT_TOOL = {
                 properties: {
                   home: { type: ['string', 'null'], description: 'Thuisteam/speler 1.' },
                   away: { type: ['string', 'null'], description: 'Uitteam/speler 2.' },
-                  selection: { type: 'string', description: 'De gekozen uitkomst in het Nederlands, kort, bv. "Ajax wint", "Over 2.5 doelpunten", "Beide teams scoren: Ja", "Feyenoord of gelijk".' },
+                  selection: { type: 'string', description: 'De gekozen uitkomst letterlijk zoals op de slip, inclusief markt en teamnaam (bv. "Reguliere speeltijd: Engeland", "Eerste doelpuntenmaker: Harry Kane", "Beide teams scoren: Ja"). Niet herformuleren of vertalen, zodat er nooit een verkeerd team in komt; alleen vertalen als de slip niet in het Nederlands is.' },
                   odds: { type: ['number', 'null'], description: 'Odds van deze selectie.' },
                   kickoffAt: { type: ['string', 'null'], description: 'Aftrap (datum + tijd) van deze wedstrijd als lokale Nederlandse tijd "YYYY-MM-DDTHH:mm" zonder tijdzone, alleen als zichtbaar op de slip. Anders null.' },
                 },
@@ -43,6 +45,7 @@ const EXTRACT_TOOL = {
           required: ['status', 'legs'],
         },
       },
+      skippedKnown: { type: 'integer', description: 'Aantal bets op de pagina dat is overgeslagen omdat het al in de lijst met bekende bets stond.' },
     },
     required: ['bets'],
   },
@@ -53,6 +56,9 @@ const SYSTEM_PROMPT = `Je leest screenshots of de platte tekst van een pagina me
 - Verzin niets: als een waarde niet zichtbaar is, geef je null. Gok geen bookmaker.
 - Staat dezelfde bet op meerdere screenshots (overlap), registreer hem dan één keer.
 - Paginatekst bevat ook menu's, promoties, wedstrijdaanbod en odds die niet gespeeld zijn: registreer alleen geplaatste bets (met een inzet), geen losse odds uit het aanbod of een lege betslip.
+- Bet builder / meerdere selecties op dezelfde wedstrijd met alleen een gezamenlijke odd: maak daar één leg van, met de selecties samengevoegd met " + " en " (bet builder)" erachter, en de gezamenlijke odd als odds van die leg.
+- Ontbreekt in een combi precies één leg-odd en is er geen boost, leid die dan af als totale odds gedeeld door het product van de andere legs (2 decimalen) en zet dat in note. Bij een boost (totaal hoger dan het product) of als meer odds ontbreken: laat ze null.
+- Krijg je een lijst met bekende bets, sla die dan over: registreer ze niet (ook niet als de status inmiddels veranderd is) en tel ze in skippedKnown. Een bet is bekend als het coupon-nummer overeenkomt, of anders inzet + totale odds + wedstrijden.
 - Vul payout altijd in zodra er een uitbetaal-/te-winnen-bedrag zichtbaar is, ook bij een bet die nog open staat.
 - Lees bedragen en odds exact over (decimale odds, punt als scheidingsteken).
 - De huidige datum is ${new Date().toISOString().slice(0, 10)}; gebruik die om een jaar af te leiden als alleen dag/maand zichtbaar is.
@@ -62,7 +68,14 @@ function inputError(message) {
   return Object.assign(new Error(message), { status: 400 });
 }
 
-export async function extractBetsFromImages(images) {
+// known: compacte regels met bets die al in de tracker staan, zodat het model
+// die overslaat - dat scheelt output-tokens bij een lange historiepagina.
+function knownBlock(known) {
+  if (!known?.length) return [];
+  return [{ type: 'text', text: `Bekende bets (staan al in de tracker, overslaan):\n${known.join('\n')}` }];
+}
+
+export async function extractBetsFromImages(images, { known } = {}) {
   if (!Array.isArray(images) || images.length === 0) throw inputError('Geen afbeeldingen meegegeven');
 
   const content = [];
@@ -71,7 +84,7 @@ export async function extractBetsFromImages(images) {
     if (!mediaType || typeof image.data !== 'string') throw inputError('Ongeldige afbeelding (alleen jpeg/png/webp/gif)');
     content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: image.data } });
   }
-  content.push({ type: 'text', text: 'Haal alle bets uit deze screenshot(s).' });
+  content.push(...knownBlock(known), { type: 'text', text: 'Haal alle bets uit deze screenshot(s).' });
   return runExtraction(content);
 }
 
@@ -80,10 +93,11 @@ export async function extractBetsFromImages(images) {
 // pagina's (oneindig scrollende historie) kappen we af.
 const MAX_PAGE_TEXT = 60000;
 
-export async function extractBetsFromText(text, { url, title } = {}) {
+export async function extractBetsFromText(text, { url, title, known } = {}) {
   if (typeof text !== 'string' || !text.trim()) throw inputError('Geen paginatekst meegegeven');
   const header = [url && `URL: ${url}`, title && `Titel: ${title}`].filter(Boolean).join('\n');
   const content = [
+    ...knownBlock(known),
     {
       type: 'text',
       text: `Haal alle geplaatste bets uit deze tekst van een bookmakerpagina.
@@ -131,5 +145,5 @@ async function runExtraction(content) {
     }
   }
   if (bets && !Array.isArray(bets) && Array.isArray(bets.bets)) bets = bets.bets;
-  return Array.isArray(bets) ? bets : [];
+  return { bets: Array.isArray(bets) ? bets : [], skippedKnown: Number(toolUse?.input?.skippedKnown) || 0 };
 }

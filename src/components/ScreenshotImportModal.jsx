@@ -34,17 +34,73 @@ function fileToImage(file) {
   });
 }
 
+// Een losse datum ("2026-10-03") leest new Date() als middernacht UTC - dat
+// wordt hier 02:00. Zonder tijd dus als lokale datum behandelen.
+function parseLocal(iso) {
+  return new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00` : iso);
+}
+
 function toLocalInput(iso) {
   if (!iso) return '';
-  const d = new Date(iso);
+  const d = parseLocal(iso);
   if (Number.isNaN(d.getTime())) return '';
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+const hasOdds = (leg) => Number(leg.odds) >= 1.01;
+const matchKey = (leg) => `${leg.home.trim().toLowerCase()}|${leg.away.trim().toLowerCase()}`;
+
+const round2 = (n) => Math.round(n * 100) / 100;
+
+// Bookmakers tonen bij meerdere selecties op dezelfde wedstrijd (bet builder,
+// "Dubbel" op één wedstrijd) vaak alleen de gezamenlijke odds, die het model
+// dan bij één van die legs zet terwijl de rest leeg blijft. Deze functie
+// verdeelt de odds zo dat het product weer op de totale odds uitkomt
+// (meetkundig: elke leg krijgt de n-de machtswortel). Let op: de verdeelde
+// odds staan niet zo op de slip; de totale odds blijven leidend.
+// - Dekken de ingevulde odds samen al het totaal, dan zijn het gezamenlijke
+//   odds per wedstrijd: per wedstrijd verdelen over al zijn legs.
+// - Anders verdelen we het restant (totaal / ingevulde odds) over de lege legs.
+// Geeft null terug als er niets zinnigs af te leiden valt.
+function fillMissingOdds(draft) {
+  const total = Number(draft.odds);
+  const missing = draft.legs.filter((leg) => !hasOdds(leg));
+  if (!(total > 1) || missing.length === 0) return null;
+  const present = draft.legs.filter(hasOdds).reduce((acc, leg) => acc * Number(leg.odds), 1);
+  const residual = total / present;
+
+  let fill;
+  if (Math.abs(residual - 1) < 0.02) {
+    const groups = new Map();
+    for (const leg of draft.legs) groups.set(matchKey(leg), [...(groups.get(matchKey(leg)) || []), leg]);
+    const perLeg = new Map();
+    for (const legs of groups.values()) {
+      if (legs.every(hasOdds)) continue;
+      // Een wedstrijd met alleen lege legs valt hier niet te vullen: het totaal is al op.
+      if (!legs.some(hasOdds)) return null;
+      const groupOdds = legs.filter(hasOdds).reduce((acc, leg) => acc * Number(leg.odds), 1);
+      for (const leg of legs) perLeg.set(leg, round2(groupOdds ** (1 / legs.length)));
+    }
+    fill = (leg) => perLeg.get(leg);
+  } else if (residual >= 1.01) {
+    const each = round2(residual ** (1 / missing.length));
+    fill = (leg) => (hasOdds(leg) ? undefined : each);
+  } else {
+    return null;
+  }
+
+  const legs = draft.legs.map((leg) => {
+    const odds = fill(leg);
+    return odds ? { ...leg, odds: String(Math.max(odds, 1.01)) } : leg;
+  });
+  if (legs.some((leg) => !hasOdds(leg))) return null;
+  return { legs, notes: [draft.notes, 'odds per leg verdeeld uit totaal'].filter(Boolean).join(' - ') };
+}
+
 function toDraft(bet, bookmakers) {
   const match = bookmakers.find((b) => b.toLowerCase() === String(bet.bookmaker || '').toLowerCase());
-  const settledAt = bet.settledAt && !Number.isNaN(new Date(bet.settledAt).getTime()) ? new Date(bet.settledAt).toISOString() : null;
+  const settledAt = bet.settledAt && !Number.isNaN(parseLocal(bet.settledAt).getTime()) ? parseLocal(bet.settledAt).toISOString() : null;
   return {
     include: !bet.duplicateOf,
     duplicate: Boolean(bet.duplicateOf),
@@ -62,6 +118,9 @@ function toDraft(bet, bookmakers) {
     payout: bet.payout != null ? String(bet.payout) : '',
     placedAt: toLocalInput(bet.placedAt),
     settledAt,
+    // Coupon-nummer in de notitie: daarmee herkent een volgende import de bet
+    // als al aanwezig.
+    notes: [bet.couponId && `Coupon ${bet.couponId}`, bet.note].filter(Boolean).join(' - '),
     legs: (bet.legs || []).map((leg) => ({
       home: leg.home || '',
       away: leg.away || '',
@@ -128,7 +187,9 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
       const [result, list] = await Promise.all([api.extractPageImport(pageImportId, method), api.getBookmakers()]);
       setBookmakers(list);
       setPageImport(result);
-      if (result.bets.length === 0) setError('Geen bets gevonden op deze pagina.');
+      if (result.bets.length === 0) {
+        setError(result.skippedKnown > 0 ? 'Geen nieuwe bets: alles op deze pagina staat er al in.' : 'Geen bets gevonden op deze pagina.');
+      }
       setDrafts(result.bets.map((bet) => toDraft(bet, list)));
     } catch (err) {
       setError(err.message);
@@ -214,6 +275,7 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
           // Bij verloren/void geen override: de uitbetaling is dan niet relevant.
           potentialPayout: draft.payout !== '' && !['lost', 'void'].includes(draft.status) ? Number(draft.payout) : undefined,
           placedAt: draft.placedAt ? new Date(draft.placedAt).toISOString() : undefined,
+          notes: draft.notes || undefined,
           legs: draft.legs.map((leg) => ({
             match: null,
             manualLabel: [leg.home.trim(), leg.away.trim()].filter(Boolean).join(' - '),
@@ -264,6 +326,8 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
               <p className="hint-text">
                 Gelezen {METHOD_LABELS[pageImport.method] || ''}
                 {hostOf(pageImport.url) ? ` van ${hostOf(pageImport.url)}` : ''}.
+                {pageImport.skippedKnown > 0 &&
+                  ` ${pageImport.skippedKnown} bet${pageImport.skippedKnown === 1 ? '' : 's'} stond${pageImport.skippedKnown === 1 ? '' : 'en'} er al in en ${pageImport.skippedKnown === 1 ? 'is' : 'zijn'} overgeslagen.`}
               </p>
             )}
             {pageImport?.screenshot && (
@@ -354,6 +418,12 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
                       </label>
                       {draft.duplicate && <span className="bet-tag">Mogelijk al aanwezig</span>}
                       {problem && <span className="import-problem">{problem}</span>}
+                      {draft.legs.some((leg) => !hasOdds(leg)) && fillMissingOdds(draft) && (
+                        <button type="button" className="btn btn-ghost btn-small" onClick={() => updateDraft(i, fillMissingOdds(draft))}>
+                          Odds aanvullen
+                        </button>
+                      )}
+                      {draft.notes && <span className="muted">{draft.notes}</span>}
                     </div>
                     <div className="import-fields">
                       <label className="field">

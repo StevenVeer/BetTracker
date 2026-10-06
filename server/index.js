@@ -362,26 +362,58 @@ app.post('/api/bets', async (req, res) => {
 // duplicateOf, zodat de client ze standaard uitgevinkt kan tonen.
 async function markDuplicates(extracted) {
   const { rows: existing } = await pool.query(
-    "select id, bookmaker, stake, odds from bets where source = 'manual'"
+    "select id, bookmaker, stake, odds, notes from bets where source = 'manual'"
   );
   return extracted.map((bet) => {
+    const coupon = bet.couponId ? String(bet.couponId).trim() : '';
     const duplicate = existing.find(
       (row) =>
-        bet.bookmaker &&
-        bet.stake != null &&
-        bet.odds != null &&
-        row.bookmaker.toLowerCase() === String(bet.bookmaker).toLowerCase() &&
-        Math.abs(Number(row.stake) - Number(bet.stake)) < 0.005 &&
-        Math.abs(Number(row.odds) - Number(bet.odds)) < 0.015
+        (coupon.length >= 5 && String(row.notes || '').includes(coupon)) ||
+        (bet.bookmaker &&
+          bet.stake != null &&
+          bet.odds != null &&
+          row.bookmaker.toLowerCase() === String(bet.bookmaker).toLowerCase() &&
+          Math.abs(Number(row.stake) - Number(bet.stake)) < 0.005 &&
+          Math.abs(Number(row.odds) - Number(bet.odds)) < 0.015)
     );
     return { ...bet, duplicateOf: duplicate?.id || null };
   });
 }
 
+// Compacte lijst van bets die al in de tracker staan, voor het model om over
+// te slaan: "2026-09-30 | €50 @3.85 | Coupon 131... | Ierland - Oostenrijk; ...".
+// Alleen de laatste 90 dagen en, als bekend, alleen die bookmaker.
+async function knownBetLines(bookmaker) {
+  const { rows } = await pool.query(
+    `select b.placed_at, b.stake, b.odds, b.notes,
+       string_agg(coalesce(l.manual_label, m.home || ' - ' || m.away, l.selection), '; ' order by l.position) as matches
+     from bets b
+     join bet_legs l on l.bet_id = b.id
+     left join matches m on m.id = l.match_id
+     where b.source = 'manual' and b.placed_at > now() - interval '90 days'
+       and ($1::text is null or lower(b.bookmaker) = lower($1))
+     group by b.id
+     order by b.placed_at desc
+     limit 150`,
+    [bookmaker || null]
+  );
+  return rows.map((row) => {
+    const coupon = String(row.notes || '').match(/coupon\s*(\d{5,})/i)?.[1];
+    return [
+      new Date(row.placed_at).toISOString().slice(0, 10),
+      `€${Number(row.stake)} @${Number(row.odds)}`,
+      coupon && `Coupon ${coupon}`,
+      row.matches,
+    ]
+      .filter(Boolean)
+      .join(' | ');
+  });
+}
+
 app.post('/api/bets/import-screenshot', async (req, res) => {
   try {
-    const bets = await markDuplicates(await extractBetsFromImages(req.body?.images));
-    res.json({ bets });
+    const { bets: extracted } = await extractBetsFromImages(req.body?.images);
+    res.json({ bets: await markDuplicates(extracted) });
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message });
   }
@@ -439,23 +471,30 @@ app.post('/api/page-imports/:id/extract', async (req, res) => {
   if (!entry) return res.status(404).json({ error: 'Import niet (meer) gevonden - klik nogmaals op de extensie' });
   try {
     const forceScreenshot = req.body?.method === 'screenshot';
+    const hostBookmaker = bookmakerFromUrl(entry.url);
+    const known = await knownBetLines(hostBookmaker);
     let method = null;
-    let extracted = [];
+    let result = { bets: [], skippedKnown: 0 };
     if (!forceScreenshot && entry.text && entry.text.trim().length >= MIN_USEFUL_TEXT) {
-      extracted = await extractBetsFromText(entry.text, { url: entry.url, title: entry.title });
+      result = await extractBetsFromText(entry.text, { url: entry.url, title: entry.title, known });
       method = 'text';
     }
-    if (extracted.length === 0 && entry.screenshot) {
-      extracted = await extractBetsFromImages([entry.screenshot]);
+    // Alleen terugvallen als de tekst echt niets opleverde - niet als alles
+    // al bekend was en dus terecht is overgeslagen.
+    if (result.bets.length === 0 && result.skippedKnown === 0 && entry.screenshot) {
+      result = await extractBetsFromImages([entry.screenshot], { known });
       method = method ? 'screenshot-fallback' : 'screenshot';
     }
-    const hostBookmaker = bookmakerFromUrl(entry.url);
-    const withBookmaker = extracted.map((bet) => {
+    const withBookmaker = result.bets.map((bet) => {
       const named = BOOKMAKERS.find((name) => name.toLowerCase() === String(bet.bookmaker || '').toLowerCase());
       return { ...bet, bookmaker: named || hostBookmaker || bet.bookmaker };
     });
+    // Wat het model toch nog teruggeeft maar al bestaat, laten we hier weg.
+    const marked = await markDuplicates(withBookmaker);
+    const fresh = marked.filter((bet) => !bet.duplicateOf);
     res.json({
-      bets: await markDuplicates(withBookmaker),
+      bets: fresh,
+      skippedKnown: result.skippedKnown + (marked.length - fresh.length),
       method,
       url: entry.url,
       title: entry.title,
