@@ -88,7 +88,24 @@ function legOddsProduct(draft) {
   return draft.legs.reduce((acc, leg) => acc * Number(leg.odds || 0), 1);
 }
 
-export default function ScreenshotImportModal({ onClose, onCreated }) {
+const METHOD_LABELS = {
+  text: 'uit de paginatekst',
+  screenshot: 'via het screenshot (geen bruikbare paginatekst)',
+  'screenshot-fallback': 'via het screenshot (de paginatekst leverde niets op)',
+};
+
+function hostOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
+// pageImportId: gezet als de app geopend is vanuit de browserextensie
+// (?import=<id>); dan lezen we die pagina meteen uit i.p.v. op screenshots te
+// wachten.
+export default function ScreenshotImportModal({ onClose, onCreated, pageImportId = null }) {
   const [images, setImages] = useState([]);
   const [drafts, setDrafts] = useState(null);
   const [bookmakers, setBookmakers] = useState([]);
@@ -96,11 +113,33 @@ export default function ScreenshotImportModal({ onClose, onCreated }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [dragging, setDragging] = useState(false);
+  const [pageImport, setPageImport] = useState(null);
   const fileInput = useRef(null);
 
   useEffect(() => {
     api.getBookmakers().then(setBookmakers).catch(() => {});
   }, []);
+
+  async function readPageImport(method) {
+    setReading(true);
+    setError(null);
+    setDrafts(null);
+    try {
+      const [result, list] = await Promise.all([api.extractPageImport(pageImportId, method), api.getBookmakers()]);
+      setBookmakers(list);
+      setPageImport(result);
+      if (result.bets.length === 0) setError('Geen bets gevonden op deze pagina.');
+      setDrafts(result.bets.map((bet) => toDraft(bet, list)));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setReading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (pageImportId) readPageImport();
+  }, [pageImportId]);
 
   async function addFiles(files) {
     const imageFiles = [...files].filter((f) => f.type.startsWith('image/'));
@@ -212,12 +251,32 @@ export default function ScreenshotImportModal({ onClose, onCreated }) {
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal import-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Bets importeren uit screenshot</h3>
+          <h3>{pageImportId ? 'Bets importeren uit pagina' : 'Bets importeren uit screenshot'}</h3>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Sluiten" title="Sluiten">
             ×
           </button>
         </div>
 
+        {pageImportId && (
+          <div className="import-page-info">
+            {reading && !drafts && <p className="hint-text">Pagina uitlezen…</p>}
+            {pageImport && (
+              <p className="hint-text">
+                Gelezen {METHOD_LABELS[pageImport.method] || ''}
+                {hostOf(pageImport.url) ? ` van ${hostOf(pageImport.url)}` : ''}.
+              </p>
+            )}
+            {pageImport?.screenshot && (
+              <div className="import-thumbs">
+                <div className="import-thumb">
+                  <img src={`data:${pageImport.screenshot.mediaType};base64,${pageImport.screenshot.data}`} alt="Screenshot van de pagina" />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!pageImportId && (
         <div
           className={`import-drop${dragging ? ' is-dragging' : ''}`}
           onDragOver={(e) => {
@@ -246,6 +305,7 @@ export default function ScreenshotImportModal({ onClose, onCreated }) {
           <strong>Plak (Ctrl+V), sleep of klik om screenshots toe te voegen</strong>
           <span className="muted">Meerdere screenshots tegelijk mag.</span>
         </div>
+        )}
 
         {images.length > 0 && (
           <div className="import-thumbs">
@@ -267,7 +327,7 @@ export default function ScreenshotImportModal({ onClose, onCreated }) {
           </div>
         )}
 
-        {images.length > 0 && !drafts && (
+        {!pageImportId && images.length > 0 && !drafts && (
           <button type="button" className="btn btn-primary import-read-btn" onClick={handleRead} disabled={reading}>
             {reading ? 'Uitlezen…' : `Bets uitlezen (${images.length} screenshot${images.length === 1 ? '' : 's'})`}
           </button>
@@ -370,9 +430,18 @@ export default function ScreenshotImportModal({ onClose, onCreated }) {
               })}
             </div>
             <div className="import-actions">
-              <button type="button" className="btn btn-ghost" onClick={() => setDrafts(null)} disabled={saving}>
-                Opnieuw uitlezen
-              </button>
+              {pageImportId ? (
+                pageImport?.method === 'text' &&
+                pageImport.hasScreenshot && (
+                  <button type="button" className="btn btn-ghost" onClick={() => readPageImport('screenshot')} disabled={saving || reading}>
+                    Via screenshot uitlezen
+                  </button>
+                )
+              ) : (
+                <button type="button" className="btn btn-ghost" onClick={() => setDrafts(null)} disabled={saving}>
+                  Opnieuw uitlezen
+                </button>
+              )}
               <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving || selected.length === 0 || invalidCount > 0}>
                 {saving ? 'Toevoegen…' : `${selected.length} bet${selected.length === 1 ? '' : 's'} toevoegen`}
               </button>

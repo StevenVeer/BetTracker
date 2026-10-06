@@ -18,6 +18,8 @@ export const api = {
   createBet: (payload) => request('/api/bets', { method: 'POST', body: JSON.stringify(payload) }),
   importScreenshot: (images) =>
     request('/api/bets/import-screenshot', { method: 'POST', body: JSON.stringify({ images }) }),
+  extractPageImport: (id, method) =>
+    request(`/api/page-imports/${encodeURIComponent(id)}/extract`, { method: 'POST', body: JSON.stringify({ method }) }),
   updateBet: (id, patch) => request(`/api/bets/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   deleteBet: (id) => request(`/api/bets/${id}`, { method: 'DELETE' }),
   updateLeg: (legId, patch) => request(`/api/bet-legs/${legId}`, { method: 'PATCH', body: JSON.stringify(patch) }),

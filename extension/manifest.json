@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "BetTracker import",
+  "version": "1.0.0",
+  "description": "Stuurt de bets op de huidige bookmakerpagina naar je lokale BetTracker.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://localhost:6070/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Stuur bets naar BetTracker",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png"
+    }
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+B"
+      },
+      "description": "Stuur bets naar BetTracker"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}

@@ -95,6 +95,16 @@ export default function App() {
   const [plannedBets, setPlannedBets] = useState([]);
   const [showPlanned, setShowPlanned] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  // Geopend vanuit de browserextensie: ?import=<id> opent de import-modal voor
+  // die pagina. De parameter halen we meteen weg, zodat een refresh hem niet
+  // nog eens start.
+  const [pageImportId, setPageImportId] = useState(() => new URLSearchParams(window.location.search).get('import'));
+  useEffect(() => {
+    if (!pageImportId) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('import');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+  }, [pageImportId]);
   const [scoresUsage, setScoresUsage] = useState(null);
   const [refreshingScores, setRefreshingScores] = useState(false);
   const [telegramBets, setTelegramBets] = useState([]);
@@ -552,6 +562,9 @@ export default function App() {
       )}
 
       {showImport && <ScreenshotImportModal onClose={() => setShowImport(false)} onCreated={handleCreated} />}
+      {pageImportId && (
+        <ScreenshotImportModal key={pageImportId} pageImportId={pageImportId} onClose={() => setPageImportId(null)} onCreated={handleCreated} />
+      )}
 
       {showPlanned && (
         <PlannedBetsModal

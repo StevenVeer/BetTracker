@@ -10,7 +10,7 @@ import { buildReportExport } from './reportGenerator.js';
 import { getLiveScores, startLiveScoresPoller, findLiveMatchFor, findLiveMatchIdFor, getLiveMatchOverlayById, amsterdamDateParts, amsterdamWallTimeToUtcMs, parseKickoffUtc, FINISHED_STATUSES } from './liveScores.js';
 import { getMatchDetail } from './matchDetail.js';
 import { LEAGUES } from './leagues.js';
-import { extractBetsFromImages } from './screenshotImport.js';
+import { extractBetsFromImages, extractBetsFromText } from './screenshotImport.js';
 
 // Personal, single-user tool — not meant to be exposed publicly.
 // There is intentionally no login/auth on any of these routes.
@@ -360,25 +360,108 @@ app.post('/api/bets', async (req, res) => {
 // bevestigde bets aan via de gewone POST /api/bets. Bets die er al lijken te
 // staan (zelfde bookmaker, inzet en totale odds) komen terug met
 // duplicateOf, zodat de client ze standaard uitgevinkt kan tonen.
+async function markDuplicates(extracted) {
+  const { rows: existing } = await pool.query(
+    "select id, bookmaker, stake, odds from bets where source = 'manual'"
+  );
+  return extracted.map((bet) => {
+    const duplicate = existing.find(
+      (row) =>
+        bet.bookmaker &&
+        bet.stake != null &&
+        bet.odds != null &&
+        row.bookmaker.toLowerCase() === String(bet.bookmaker).toLowerCase() &&
+        Math.abs(Number(row.stake) - Number(bet.stake)) < 0.005 &&
+        Math.abs(Number(row.odds) - Number(bet.odds)) < 0.015
+    );
+    return { ...bet, duplicateOf: duplicate?.id || null };
+  });
+}
+
 app.post('/api/bets/import-screenshot', async (req, res) => {
   try {
-    const extracted = await extractBetsFromImages(req.body?.images);
-    const { rows: existing } = await pool.query(
-      "select id, bookmaker, stake, odds from bets where source = 'manual'"
-    );
-    const bets = extracted.map((bet) => {
-      const duplicate = existing.find(
-        (row) =>
-          bet.bookmaker &&
-          bet.stake != null &&
-          bet.odds != null &&
-          row.bookmaker.toLowerCase() === String(bet.bookmaker).toLowerCase() &&
-          Math.abs(Number(row.stake) - Number(bet.stake)) < 0.005 &&
-          Math.abs(Number(row.odds) - Number(bet.odds)) < 0.015
-      );
-      return { ...bet, duplicateOf: duplicate?.id || null };
-    });
+    const bets = await markDuplicates(await extractBetsFromImages(req.body?.images));
     res.json({ bets });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+// Pagina-import vanuit de browserextensie (extension/): de extensie stuurt de
+// paginatekst + een screenshot van het zichtbare deel hierheen en opent daarna
+// de app met ?import=<id>. De app laat het uitlezen pas dan doen, zodat je de
+// voortgang en de preview in de gewone import-modal ziet. Alleen in het
+// geheugen en kortlevend: het is een overdracht, geen opslag.
+const PAGE_IMPORT_TTL_MS = 30 * 60 * 1000;
+const pageImports = new Map();
+
+function prunePageImports() {
+  const cutoff = Date.now() - PAGE_IMPORT_TTL_MS;
+  for (const [id, entry] of pageImports) if (entry.createdAt < cutoff) pageImports.delete(id);
+}
+
+// De bookmaker volgt vrijwel altijd uit het domein (toto.nl, unibet.nl, ...).
+function bookmakerFromUrl(url) {
+  let host;
+  try {
+    host = new URL(url).hostname.toLowerCase().replace(/[^a-z0-9.]/g, '');
+  } catch {
+    return null;
+  }
+  return BOOKMAKERS.find((name) => host.split('.').some((part) => part.includes(name.toLowerCase()))) || null;
+}
+
+app.post('/api/page-imports', (req, res) => {
+  const { url, title, text, screenshot } = req.body || {};
+  const hasText = typeof text === 'string' && text.trim().length > 0;
+  const hasScreenshot = screenshot && typeof screenshot.data === 'string';
+  if (!hasText && !hasScreenshot) return res.status(400).json({ error: 'Geen paginatekst of screenshot meegegeven' });
+  prunePageImports();
+  const id = randomUUID();
+  pageImports.set(id, {
+    createdAt: Date.now(),
+    url: typeof url === 'string' ? url : null,
+    title: typeof title === 'string' ? title : null,
+    text: hasText ? text : null,
+    screenshot: hasScreenshot ? { mediaType: screenshot.mediaType, data: screenshot.data } : null,
+  });
+  res.status(201).json({ id });
+});
+
+// Leest de bets uit: eerst uit de tekst; levert dat niets op (of is er geen
+// bruikbare tekst, bv. een canvas-/iframe-pagina) dan via het screenshot.
+// Met { method: 'screenshot' } forceer je het screenshot.
+const MIN_USEFUL_TEXT = 40;
+
+app.post('/api/page-imports/:id/extract', async (req, res) => {
+  prunePageImports();
+  const entry = pageImports.get(req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Import niet (meer) gevonden - klik nogmaals op de extensie' });
+  try {
+    const forceScreenshot = req.body?.method === 'screenshot';
+    let method = null;
+    let extracted = [];
+    if (!forceScreenshot && entry.text && entry.text.trim().length >= MIN_USEFUL_TEXT) {
+      extracted = await extractBetsFromText(entry.text, { url: entry.url, title: entry.title });
+      method = 'text';
+    }
+    if (extracted.length === 0 && entry.screenshot) {
+      extracted = await extractBetsFromImages([entry.screenshot]);
+      method = method ? 'screenshot-fallback' : 'screenshot';
+    }
+    const hostBookmaker = bookmakerFromUrl(entry.url);
+    const withBookmaker = extracted.map((bet) => {
+      const named = BOOKMAKERS.find((name) => name.toLowerCase() === String(bet.bookmaker || '').toLowerCase());
+      return { ...bet, bookmaker: named || hostBookmaker || bet.bookmaker };
+    });
+    res.json({
+      bets: await markDuplicates(withBookmaker),
+      method,
+      url: entry.url,
+      title: entry.title,
+      hasScreenshot: Boolean(entry.screenshot),
+      screenshot: entry.screenshot,
+    });
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message });
   }
