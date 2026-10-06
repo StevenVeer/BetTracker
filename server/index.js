@@ -22,7 +22,7 @@ app.use(express.json({ limit: '25mb' }));
 
 const ODDS_API_KEY = process.env.ODDS_API_KEY;
 
-const BOOKMAKERS = ['Bet365', 'BetCity', 'Toto', 'Unibet', '711', 'BetMGM', 'Jacks'];
+const BOOKMAKERS = ['Bet365', 'BetCity', 'Toto', 'Unibet', '711', 'BetMGM', 'Jacks', 'BetNation'];
 
 // De Odds API stuurt het resterende/verbruikte quotum voor de lopende
 // periode mee in elke response — we loggen alleen wanneer die cijfers

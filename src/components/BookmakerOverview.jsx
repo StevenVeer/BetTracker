@@ -22,6 +22,7 @@ const BOOKMAKER_SITES = {
   BetMGM: 'https://www.betmgm.nl',
   '711': 'https://www.711.nl/',
   Jacks: 'https://jacks.nl/sports#sports-hub/football',
+  BetNation: 'https://www.betnation.nl',
 };
 
 function bookmakerUrl(name) {
