@@ -1,4 +1,4 @@
-import { betWinst } from '../dailyResults.js';
+import { betOutcome, betWinst } from '../dailyResults.js';
 import { Amount } from './AmountsToggle.jsx';
 
 function fmt(n) {
@@ -32,9 +32,9 @@ function isPriced(bet) {
 }
 
 function summarize(bets) {
-  const decided = bets.filter((b) => ['won', 'lost', 'void'].includes(b.status));
-  const won = decided.filter((b) => b.status === 'won').length;
-  const lost = decided.filter((b) => b.status === 'lost').length;
+  const decided = bets.filter((b) => ['won', 'lost', 'void'].includes(betOutcome(b)));
+  const won = decided.filter((b) => betOutcome(b) === 'won').length;
+  const lost = decided.filter((b) => betOutcome(b) === 'lost').length;
   const priced = decided.filter(isPriced);
   const staked = priced.reduce((s, b) => s + Number(b.stake), 0);
   const returned = priced.reduce((s, b) => s + betWinst(b), 0);

@@ -1304,6 +1304,12 @@ body {
 .bet-row.status-cashed_out {
   border-left-color: rgba(244, 242, 232, 0.3);
 }
+.bet-row.status-cashed_out.cashout-won {
+  border-left-color: var(--win);
+}
+.bet-row.status-cashed_out.cashout-lost {
+  border-left-color: var(--loss);
+}
 
 .bet-main {
   display: grid;
@@ -1376,6 +1382,31 @@ body {
   background: rgba(244, 242, 232, 0.06);
   border-color: rgba(244, 242, 232, 0.3);
   color: rgba(244, 242, 232, 0.75);
+}
+.status-badge.status-cashed_out.cashout-won {
+  background: rgba(37, 156, 91, 0.14);
+  border-color: var(--win);
+  color: var(--win-text);
+}
+.status-badge.status-cashed_out.cashout-lost {
+  background: rgba(190, 56, 61, 0.14);
+  border-color: var(--loss);
+  color: var(--loss-text);
+}
+
+.cashout-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cashout-form label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cashout-form input {
+  width: 90px;
 }
 
 .score-badge {

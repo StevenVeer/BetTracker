@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { describeBet, STATUS_LABELS } from '../markets.js';
 import { api } from '../api.js';
 import { Amount } from './AmountsToggle.jsx';
+import { betOutcome } from '../dailyResults.js';
 import DecimalInput from './DecimalInput.jsx';
 
 export function formatKickoff(iso) {
@@ -188,6 +189,55 @@ function LegRow({ leg, onLiveLinked }) {
 }
 
 const MANUAL_STATUSES = ['won', 'lost', 'void', 'cashed_out'];
+
+// Extra klasse voor een cashout zodat rand en badge groen/rood kleuren naar
+// gelang de uitbetaling boven of onder de inzet lag.
+function cashoutClass(bet) {
+  if (bet.status !== 'cashed_out') return '';
+  const outcome = betOutcome(bet);
+  return outcome === 'won' || outcome === 'lost' ? ` cashout-${outcome}` : '';
+}
+
+// Cashout vraagt eerst het daadwerkelijk uitbetaalde bedrag - dat wordt de
+// payout van de bet, zodat winst/ROI en de win/verlies-telling kloppen.
+function CashoutForm({ bet, onConfirm, onCancel }) {
+  const [amount, setAmount] = useState('');
+  const value = Number(amount);
+  const valid = amount.trim() !== '' && Number.isFinite(value) && value >= 0;
+  const diff = valid ? value - Number(bet.stake) : null;
+
+  function submit(e) {
+    e.preventDefault();
+    if (valid) onConfirm(Math.round(value * 100) / 100);
+  }
+
+  return (
+    <form className="cashout-form" onSubmit={submit}>
+      <label>
+        Cashout €
+        <DecimalInput
+          autoFocus
+          className="odds-edit-input"
+          placeholder="0.00"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          onKeyDown={(e) => e.key === 'Escape' && onCancel()}
+        />
+      </label>
+      {diff !== null && (
+        <span className={diff > 0 ? 'amount-positive' : diff < 0 ? 'amount-negative' : 'muted'}>
+          {diff > 0 ? 'Gewonnen' : diff < 0 ? 'Verloren' : 'Break-even'} ({diff >= 0 ? '+' : '−'}€ {Math.abs(diff).toFixed(2)})
+        </span>
+      )}
+      <button type="submit" className="btn btn-primary btn-small" disabled={!valid}>
+        Opslaan
+      </button>
+      <button type="button" className="btn btn-ghost btn-small" onClick={onCancel}>
+        Annuleren
+      </button>
+    </form>
+  );
+}
 const LEG_STATUS_OPTIONS = [
   { key: 'open', icon: '○', title: 'Open' },
   { key: 'won', icon: '✓', title: 'Gewonnen' },
@@ -528,6 +578,7 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
 
 export default function BetList({ bets, onUpdate, onUpdateLeg, onDelete, onLiveLinked }) {
   const [editingId, setEditingId] = useState(null);
+  const [cashoutId, setCashoutId] = useState(null);
   const editingBet = editingId ? bets.find((b) => b.id === editingId) : null;
 
   if (bets.length === 0) {
@@ -548,7 +599,7 @@ export default function BetList({ bets, onUpdate, onUpdateLeg, onDelete, onLiveL
           );
 
           return (
-            <li key={bet.id} className={`bet-row status-${bet.status}`}>
+            <li key={bet.id} className={`bet-row status-${bet.status}${cashoutClass(bet)}`}>
               <div className="bet-row-controls">
                 <button type="button" className="bet-edit" onClick={() => setEditingId(bet.id)} aria-label="Bet bewerken" title="Bet bewerken">
                   ✎
@@ -578,7 +629,7 @@ export default function BetList({ bets, onUpdate, onUpdateLeg, onDelete, onLiveL
                         → <Amount>{`EUR ${Number(bet.potentialPayout).toFixed(2)}`}</Amount>
                       </span>
                     </span>
-                    <span className={`status-badge status-${bet.status}`}>{STATUS_LABELS[bet.status]}</span>
+                    <span className={`status-badge status-${bet.status}${cashoutClass(bet)}`}>{STATUS_LABELS[bet.status]}</span>
                   </div>
                 </>
               ) : (
@@ -603,17 +654,32 @@ export default function BetList({ bets, onUpdate, onUpdateLeg, onDelete, onLiveL
                     </span>
                   </div>
                   <ScoreBadge leg={bet.legs[0]} onLinked={onLiveLinked} />
-                  <span className={`status-badge status-${bet.status}`}>{STATUS_LABELS[bet.status]}</span>
+                  <span className={`status-badge status-${bet.status}${cashoutClass(bet)}`}>{STATUS_LABELS[bet.status]}</span>
                 </div>
               )}
 
               {bet.status === 'open' && (
                 <div className="bet-actions">
-                  {MANUAL_STATUSES.map((status) => (
-                    <button key={status} className="btn btn-ghost btn-small" onClick={() => onUpdate(bet.id, { status })}>
-                      {STATUS_LABELS[status]}
-                    </button>
-                  ))}
+                  {cashoutId === bet.id ? (
+                    <CashoutForm
+                      bet={bet}
+                      onCancel={() => setCashoutId(null)}
+                      onConfirm={async (amount) => {
+                        await onUpdate(bet.id, { status: 'cashed_out', potentialPayout: amount });
+                        setCashoutId(null);
+                      }}
+                    />
+                  ) : (
+                    MANUAL_STATUSES.map((status) => (
+                      <button
+                        key={status}
+                        className="btn btn-ghost btn-small"
+                        onClick={() => (status === 'cashed_out' ? setCashoutId(bet.id) : onUpdate(bet.id, { status }))}
+                      >
+                        {STATUS_LABELS[status]}
+                      </button>
+                    ))
+                  )}
                 </div>
               )}
             </li>

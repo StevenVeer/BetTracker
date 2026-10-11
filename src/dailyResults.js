@@ -10,6 +10,18 @@ export function todayKey() {
 // Wat een bet aan winst teruggeeft, los van de inzet: bij winst/cashout de
 // volledige uitbetaling, bij void de inzet terug. Bij verlies (of nog open)
 // gebeurt er niets meer - dat geld is al "weg" op het moment van inzetten.
+// Uitkomst voor win/verlies-tellingen. Een cashout heeft geen eigen uitkomst:
+// meer terug dan ingezet telt als gewonnen, minder als verloren, precies
+// break-even telt als void (zoals een push).
+export function betOutcome(bet) {
+  if (bet.status !== 'cashed_out') return bet.status;
+  const payout = Number(bet.potentialPayout);
+  const stake = Number(bet.stake);
+  if (payout > stake) return 'won';
+  if (payout < stake) return 'lost';
+  return 'void';
+}
+
 export function betWinst(bet) {
   if (bet.status === 'won' || bet.status === 'cashed_out') return Number(bet.potentialPayout);
   if (bet.status === 'void') return Number(bet.stake);

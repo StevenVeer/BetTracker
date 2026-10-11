@@ -11,7 +11,7 @@ import { CountButton, LiveStatus, MoreMenu } from './components/ToolbarActions.j
 import NotificationToggle, { useNotificationPreference } from './components/NotificationToggle.jsx';
 import AmountsToggle, { Amount, AmountsVisibilityProvider, useAmountsVisible } from './components/AmountsToggle.jsx';
 import { useSettlementNotifications } from './notifications.js';
-import { groupByDay, todayKey } from './dailyResults.js';
+import { betOutcome, groupByDay, todayKey } from './dailyResults.js';
 
 const FILTERS = [
   { key: 'open', label: 'Open' },
@@ -264,11 +264,11 @@ export default function App() {
   const overlaidTelegramBets = useMemo(() => applyLiveOverlay(telegramBets, liveOverlay), [telegramBets, liveOverlay]);
 
   const visibleBets = useMemo(
-    () => (filter === 'all' ? overlaidBets : overlaidBets.filter((b) => b.status === filter)),
+    () => (filter === 'all' ? overlaidBets : overlaidBets.filter((b) => b.status === filter || (filter !== 'open' && betOutcome(b) === filter))),
     [overlaidBets, filter]
   );
   const visibleTelegramBets = useMemo(
-    () => (telegramFilter === 'all' ? overlaidTelegramBets : overlaidTelegramBets.filter((b) => b.status === telegramFilter)),
+    () => (telegramFilter === 'all' ? overlaidTelegramBets : overlaidTelegramBets.filter((b) => b.status === telegramFilter || (telegramFilter !== 'open' && betOutcome(b) === telegramFilter))),
     [overlaidTelegramBets, telegramFilter]
   );
 
