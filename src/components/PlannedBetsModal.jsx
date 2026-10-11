@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { describeBet } from '../markets.js';
 import { formatKickoff, legLabel } from './BetList.jsx';
 import PlannedBetForm from './PlannedBetForm.jsx';
+import DecimalInput from './DecimalInput.jsx';
 
 const WEEKDAY_DATE_FORMAT = new Intl.DateTimeFormat('nl-NL', { weekday: 'long', day: 'numeric', month: 'short' });
 const CHIP_DATE_FORMAT = new Intl.DateTimeFormat('nl-NL', { day: 'numeric', month: 'short' });
@@ -138,11 +139,8 @@ function PlannedBetRow({ planned, bookmakers, onPlaced, onRemoved, onError }) {
         ) : (
           <div className="planned-row-actions placing-form">
             {planned.legs.map((leg, index) => (
-              <input
+              <DecimalInput
                 key={leg.id}
-                type="number"
-                step="0.01"
-                min="1.01"
                 placeholder={isCombi ? `Odds ${index + 1}` : 'Odds'}
                 value={legOdds[index]}
                 onChange={(e) => updateLegOdds(index, e.target.value)}
@@ -156,7 +154,7 @@ function PlannedBetRow({ planned, bookmakers, onPlaced, onRemoved, onError }) {
                 </option>
               ))}
             </select>
-            <input type="number" step="0.01" min="0" placeholder="Inzet" value={stake} onChange={(e) => setStake(e.target.value)} />
+            <DecimalInput placeholder="Inzet" value={stake} onChange={(e) => setStake(e.target.value)} />
             {isCombi && <span className="placing-stake-label">Totaal {finalOdds ? finalOdds.toFixed(2) : '—'}</span>}
             <button type="button" className="btn btn-primary btn-small" onClick={confirmPlace} disabled={submitting}>
               {submitting ? '…' : 'Bevestigen'}

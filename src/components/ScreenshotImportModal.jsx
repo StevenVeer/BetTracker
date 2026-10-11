@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
+import DecimalInput from './DecimalInput.jsx';
 
 const MAX_DIMENSION = 1600;
 const STATUS_OPTIONS = [
@@ -439,11 +440,11 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
                       </label>
                       <label className="field">
                         <span>Inzet (€)</span>
-                        <input type="number" step="0.01" min="0" value={draft.stake} onChange={(e) => updateDraft(i, { stake: e.target.value })} />
+                        <DecimalInput value={draft.stake} onChange={(e) => updateDraft(i, { stake: e.target.value })} />
                       </label>
                       <label className="field">
                         <span>Totale odds</span>
-                        <input type="number" step="0.01" min="1" value={draft.odds} onChange={(e) => updateDraft(i, { odds: e.target.value })} />
+                        <DecimalInput value={draft.odds} onChange={(e) => updateDraft(i, { odds: e.target.value })} />
                       </label>
                       <label className="field">
                         <span>Status</span>
@@ -458,10 +459,7 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
                       {draft.status !== 'lost' && draft.status !== 'void' && (
                         <label className="field">
                           <span>{draft.status === 'open' ? 'Mogelijke uitbetaling (€)' : 'Uitbetaling (€)'}</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
+                          <DecimalInput
                             placeholder={Number(draft.stake) > 0 && Number(draft.odds) > 0 ? (Number(draft.stake) * Number(draft.odds)).toFixed(2) : ''}
                             value={draft.payout}
                             onChange={(e) => updateDraft(i, { payout: e.target.value })}
@@ -478,11 +476,8 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
                         <input placeholder="Thuis" value={leg.home} onChange={(e) => updateLeg(i, j, { home: e.target.value })} />
                         <input placeholder="Uit" value={leg.away} onChange={(e) => updateLeg(i, j, { away: e.target.value })} />
                         <input placeholder="Selectie" value={leg.selection} onChange={(e) => updateLeg(i, j, { selection: e.target.value })} />
-                        <input
+                        <DecimalInput
                           className="import-leg-odds"
-                          type="number"
-                          step="0.01"
-                          min="1"
                           placeholder="Odds"
                           value={leg.odds}
                           onChange={(e) => updateLeg(i, j, { odds: e.target.value })}

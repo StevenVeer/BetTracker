@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { MARKETS, selectionOptions, describeBet, isLineMarket } from '../markets.js';
 import MatchPicker from './MatchPicker.jsx';
+import DecimalInput from './DecimalInput.jsx';
 
 const EMPTY_LEG_DRAFT = {
   market: 'team_wint',
@@ -297,9 +298,7 @@ export default function BetForm({ onCreated }) {
           {needsLine(legDraft.market) && (
             <label className="field">
               <span>Lijn</span>
-              <input
-                type="number"
-                step="0.25"
+              <DecimalInput
                 placeholder={legDraft.market === 'handicap' ? '-1.5' : '2.5'}
                 value={legDraft.line}
                 onChange={(e) => updateLegDraft('line', e.target.value)}
@@ -309,7 +308,7 @@ export default function BetForm({ onCreated }) {
 
           <label className="field">
             <span>Odds</span>
-            <input type="number" step="0.01" min="1.01" placeholder="1.85" value={legOdds} onChange={(e) => setLegOdds(e.target.value)} />
+            <DecimalInput placeholder="1.85" value={legOdds} onChange={(e) => setLegOdds(e.target.value)} />
           </label>
 
           <div className="field add-leg-btn-wrap">
@@ -382,9 +381,7 @@ export default function BetForm({ onCreated }) {
               {needsLine(manualLegDraft.market) && (
                 <label className="field">
                   <span>Lijn</span>
-                  <input
-                    type="number"
-                    step="0.25"
+                  <DecimalInput
                     placeholder={manualLegDraft.market === 'handicap' ? '-1.5' : '2.5'}
                     value={manualLegDraft.line}
                     onChange={(e) => updateManualLegDraft('line', e.target.value)}
@@ -394,7 +391,7 @@ export default function BetForm({ onCreated }) {
 
               <label className="field">
                 <span>Odds</span>
-                <input type="number" step="0.01" min="1.01" placeholder="1.85" value={manualDraft.odds} onChange={(e) => setManualDraft((d) => ({ ...d, odds: e.target.value }))} />
+                <DecimalInput placeholder="1.85" value={manualDraft.odds} onChange={(e) => setManualDraft((d) => ({ ...d, odds: e.target.value }))} />
               </label>
               <div className="field add-leg-btn-wrap">
                 <button type="button" className="btn btn-primary btn-small" onClick={addManualLeg}>
@@ -439,16 +436,13 @@ export default function BetForm({ onCreated }) {
       <div className="field-row">
         <label className="field">
           <span>Inzet (EUR)</span>
-          <input type="number" step="0.01" min="0" placeholder="10" value={stake} onChange={(e) => setStake(e.target.value)} />
+          <DecimalInput placeholder="10" value={stake} onChange={(e) => setStake(e.target.value)} />
         </label>
         <label className="field">
           <span>
             Totale odds{isBoosted && <s className="odds-was">{combinedOdds.toFixed(2)}</s>}
           </span>
-          <input
-            type="number"
-            step="0.01"
-            min="1.01"
+          <DecimalInput
             placeholder="—"
             value={oddsInput}
             onChange={(e) => {

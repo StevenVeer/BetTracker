@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { describeBet, STATUS_LABELS } from '../markets.js';
 import { api } from '../api.js';
 import { Amount } from './AmountsToggle.jsx';
+import DecimalInput from './DecimalInput.jsx';
 
 export function formatKickoff(iso) {
   if (!iso) return '—';
@@ -393,10 +394,7 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
                         {group.manual && <ScoreBadge leg={leg} onLinked={onLiveLinked} />}
                       </div>
                       {isCombi && (
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="1.01"
+                        <DecimalInput
                           className={`odds-edit-input${legChanges.find((c) => c.leg.id === leg.id)?.oddsInvalid ? ' is-invalid' : ''}`}
                           value={d.odds}
                           onChange={(e) => setLeg(leg.id, { odds: e.target.value })}
@@ -443,11 +441,8 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
           <div className="eb-totals">
             <label>
               Totaal @
-              <input
+              <DecimalInput
                 ref={totalRef}
-                type="number"
-                step="0.01"
-                min="1.01"
                 className="odds-edit-input"
                 value={fields.odds}
                 onChange={(e) => setField('odds', e.target.value)}
@@ -455,10 +450,7 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
             </label>
             <label>
               Inzet €
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
+              <DecimalInput
                 className="odds-edit-input stake-edit-input"
                 value={fields.stake}
                 onChange={(e) => setField('stake', e.target.value)}
@@ -466,9 +458,7 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
             </label>
             <label>
               → €
-              <input
-                type="number"
-                step="0.01"
+              <DecimalInput
                 className="odds-edit-input payout-edit-input"
                 value={fields.payout}
                 onChange={(e) => {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { Amount } from './AmountsToggle.jsx';
+import DecimalInput from './DecimalInput.jsx';
 
 function formatEUR(n) {
   return (
@@ -49,7 +50,7 @@ function WithdrawForm({ bookmaker, onDone }) {
 
   return (
     <form className="withdraw-form" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-      <input type="number" step="0.5" min="0" placeholder="bedrag" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      <DecimalInput placeholder="bedrag" value={amount} onChange={(e) => setAmount(e.target.value)} />
       <button type="submit" className="btn btn-primary btn-small" disabled={submitting}>
         Uitbetaald
       </button>
@@ -78,7 +79,7 @@ function DepositForm({ bookmaker, onDone, compact = false }) {
   if (compact) {
     return (
       <form className="mini-form" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <input type="number" step="0.5" min="0" placeholder="bedrag" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <DecimalInput placeholder="bedrag" value={amount} onChange={(e) => setAmount(e.target.value)} />
         <button type="submit" disabled={submitting} title="Storten">
           +
         </button>
@@ -88,7 +89,7 @@ function DepositForm({ bookmaker, onDone, compact = false }) {
 
   return (
     <form className="withdraw-form deposit-form" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-      <input type="number" step="0.5" min="0" placeholder="bedrag" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      <DecimalInput placeholder="bedrag" value={amount} onChange={(e) => setAmount(e.target.value)} />
       <button type="submit" className="btn btn-small" disabled={submitting}>
         Gestort
       </button>
@@ -121,9 +122,7 @@ function CorrectionForm({ target, onDone, isIng = false }) {
 
   return (
     <form className="withdraw-form correction-form" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-      <input
-        type="number"
-        step="0.01"
+      <DecimalInput
         placeholder="±bedrag"
         title="Correctie op het berekende saldo, bv. door afrondingsverschil bij de bookmaker"
         value={amount}
