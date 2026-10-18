@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api.js';
 import BetForm from './components/BetForm.jsx';
-import BetList from './components/BetList.jsx';
+import BetList, { legKickoff } from './components/BetList.jsx';
+import LinkSuggestionsModal from './components/LinkSuggestionsModal.jsx';
+import KickoffTimesModal from './components/KickoffTimesModal.jsx';
 import Overview from './components/Overview.jsx';
 import LiveScores from './components/LiveScores.jsx';
 import OpenBetsModal from './components/OpenBetsModal.jsx';
@@ -63,10 +65,10 @@ function applyLiveOverlay(bets, overlay) {
 }
 
 // Op starttijd van de wedstrijd, vroegste eerst - handmatige picks zonder
-// wedstrijd (dus zonder kickoff) hebben geen starttijd en komen achteraan.
+// wedstrijd tellen met hun ingevulde starttijd; zonder starttijd achteraan.
 function byKickoff(a, b) {
-  const aTime = a.match?.commenceTime ? new Date(a.match.commenceTime).getTime() : Infinity;
-  const bTime = b.match?.commenceTime ? new Date(b.match.commenceTime).getTime() : Infinity;
+  const aTime = legKickoff(a) ? new Date(legKickoff(a)).getTime() : Infinity;
+  const bTime = legKickoff(b) ? new Date(legKickoff(b)).getTime() : Infinity;
   return aTime - bTime;
 }
 
@@ -95,6 +97,11 @@ export default function App() {
   const [plannedBets, setPlannedBets] = useState([]);
   const [showPlanned, setShowPlanned] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  // Koppelsuggesties (beide bronnen in één lijst, per tab gefilterd) en welke
+  // bron er in de suggestie-modal openstaat: 'manual' | 'telegram' | null.
+  const [linkSuggestions, setLinkSuggestions] = useState([]);
+  const [suggestionsSource, setSuggestionsSource] = useState(null);
+  const [showKickoffs, setShowKickoffs] = useState(false);
   // Geopend vanuit de browserextensie: ?import=<id> opent de import-modal voor
   // die pagina. De parameter halen we meteen weg, zodat een refresh hem niet
   // nog eens start.
@@ -123,7 +130,7 @@ export default function App() {
   // reloads (na een live-koppeling of scores ophalen) verversen stil, anders
   // unmount BetList even voor "Laden…" en springt de pagina terug naar boven.
   function loadBets() {
-    api
+    return api
       .getBets('all', 'manual')
       .then(setBets)
       .catch((err) => setError(err.message))
@@ -161,25 +168,53 @@ export default function App() {
       .catch(() => {}); // best-effort - zonder overlay tonen we gewoon geen live-badges
   }, []);
 
+  // Zelfde ritme als de overlay: de feed (en dus de kandidaten) ververst
+  // server-side elke 20s, en na een koppeling moet het item verdwijnen.
+  const loadLinkSuggestions = useCallback(() => {
+    return api
+      .getLinkSuggestions()
+      .then((data) => setLinkSuggestions(data.items || []))
+      .catch(() => {});
+  }, []);
+
   // Na het koppelen van een volledig handmatige selectie (geen match_id, zie
   // ScoreBadge) krijgt de leg er serverside pas een match bij - een reload
   // van de overlay alleen is dan niet genoeg, de bet zelf moet opnieuw op om
   // leg.match te laten verschijnen.
   function handleLiveLinked() {
     loadLiveOverlay();
+    loadLinkSuggestions();
     loadBets();
   }
 
   function handleTelegramLiveLinked() {
     loadLiveOverlay();
+    loadLinkSuggestions();
     loadTelegramBets();
   }
 
   useEffect(() => {
     loadLiveOverlay();
-    const interval = setInterval(loadLiveOverlay, LIVE_OVERLAY_POLL_MS);
+    loadLinkSuggestions();
+    const interval = setInterval(() => {
+      loadLiveOverlay();
+      loadLinkSuggestions();
+    }, LIVE_OVERLAY_POLL_MS);
     return () => clearInterval(interval);
-  }, [loadLiveOverlay]);
+  }, [loadLiveOverlay, loadLinkSuggestions]);
+
+  // Starttijd per leg opslaan (Starttijden-modal) en daarna bets + suggesties
+  // verversen - een starttijd maakt de koppelsuggesties scherper.
+  async function handleSaveKickoff(legIds, kickoffAt) {
+    try {
+      for (const legId of legIds) await api.updateLeg(legId, { kickoffAt });
+      await loadBets();
+      loadLinkSuggestions();
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }
 
   async function handleRefreshScores() {
     setRefreshingScores(true);
@@ -296,6 +331,15 @@ export default function App() {
   const { openPicks: telegramOpenPicks, unsettledPicks: telegramUnsettledPicks } = useMemo(
     () => splitPicks(overlaidTelegramBets),
     [overlaidTelegramBets]
+  );
+
+  const ownSuggestions = useMemo(() => linkSuggestions.filter((s) => s.source === 'manual'), [linkSuggestions]);
+  const telegramSuggestions = useMemo(() => linkSuggestions.filter((s) => s.source === 'telegram'), [linkSuggestions]);
+  const countWithCandidates = (items) => items.filter((s) => s.candidates.length > 0).length;
+  const manualOpenPicks = useMemo(() => openPicks.filter((p) => !p.match), [openPicks]);
+  const missingKickoffs = useMemo(
+    () => new Set(manualOpenPicks.filter((p) => !p.kickoffAt).map((p) => (p.manualLabel || p.id).toLowerCase())).size,
+    [manualOpenPicks]
   );
 
   async function handleCreated(bet) {
@@ -448,6 +492,14 @@ export default function App() {
                   onClick={() => setPicksModal({ source: 'telegram', kind: 'unsettled' })}
                 />
               )}
+              {countWithCandidates(telegramSuggestions) > 0 && (
+                <CountButton
+                  icon="link"
+                  label="Koppelsuggesties"
+                  count={countWithCandidates(telegramSuggestions)}
+                  onClick={() => setSuggestionsSource('telegram')}
+                />
+              )}
             </div>
             <MoreMenu
               items={[
@@ -520,6 +572,19 @@ export default function App() {
                 />
               )}
               <CountButton icon="bookmark" label="Gepland" count={plannedBets.length} onClick={() => setShowPlanned(true)} />
+              <CountButton
+                icon="link"
+                label="Koppelsuggesties"
+                count={countWithCandidates(ownSuggestions)}
+                onClick={() => setSuggestionsSource('manual')}
+              />
+              <CountButton
+                icon="clock"
+                label="Starttijden"
+                count={missingKickoffs}
+                warn
+                onClick={() => setShowKickoffs(true)}
+              />
             </div>
             <BetForm onCreated={handleCreated} />
             <MoreMenu
@@ -559,6 +624,18 @@ export default function App() {
           onLiveLinked={picksModal.source === 'telegram' ? handleTelegramLiveLinked : handleLiveLinked}
           onSettle={picksModal.source === 'telegram' ? handleTelegramLegUpdate : handleLegUpdate}
         />
+      )}
+
+      {suggestionsSource && (
+        <LinkSuggestionsModal
+          items={suggestionsSource === 'telegram' ? telegramSuggestions : ownSuggestions}
+          onLinked={suggestionsSource === 'telegram' ? handleTelegramLiveLinked : handleLiveLinked}
+          onClose={() => setSuggestionsSource(null)}
+        />
+      )}
+
+      {showKickoffs && (
+        <KickoffTimesModal picks={manualOpenPicks} onSave={handleSaveKickoff} onClose={() => setShowKickoffs(false)} />
       )}
 
       {showImport && <ScreenshotImportModal onClose={() => setShowImport(false)} onCreated={handleCreated} />}

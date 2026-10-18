@@ -3699,3 +3699,52 @@ body {
     font-size: 10.5px;
   }
 }
+
+/* ---- Koppelsuggesties & starttijden ---- */
+.suggest-score {
+  font-family: 'Space Mono', ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+  color: rgba(244, 242, 232, 0.55);
+}
+.suggest-score.is-strong {
+  color: var(--win-text);
+}
+.suggest-none {
+  font-size: 13px;
+  color: rgba(244, 242, 232, 0.6);
+}
+.suggest-none summary {
+  cursor: pointer;
+  font-family: 'Space Mono', ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+}
+.suggest-none ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.kickoff-missing {
+  border-color: rgba(232, 178, 61, 0.45);
+}
+.kickoff-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+}
+.kickoff-edit-row input[type='datetime-local'] {
+  width: auto;
+  font-family: 'Space Mono', ui-monospace, SFMono-Regular, monospace;
+  font-size: 12.5px;
+  padding: 0 11px;
+  height: 34px;
+  border: 1px solid rgba(232, 178, 61, 0.42);
+  border-radius: 7px;
+  color: var(--chalk);
+  background: rgba(10, 18, 16, 0.72);
+  color-scheme: dark;
+}
+.kickoff-edit-row input[type='datetime-local']:focus {
+  outline: none;
+  border-color: var(--gold);
+}

@@ -5,7 +5,7 @@
 // Eén gedeelde poll-cyclus voor alle open tabbladen samen, niet een aparte
 // upstream-call per binnenkomende /api/live-scores-request.
 import { LEAGUES } from './leagues.js';
-import { teamNamesMatch } from './teamMatch.js';
+import { teamNameSimilarity, teamNamesMatch } from './teamMatch.js';
 
 // 'all' levert alle voetbalwedstrijden van een dag in één call; zonder limit
 // kapt ESPN af op 100 events, en op een drukke dag zijn dat er ruim 400.
@@ -122,6 +122,12 @@ export const FINISHED_STATUSES = new Set(['FT', 'AET']);
 // Eigen state per wedstrijd-ID, zodat een wedstrijd tot 02:00 de volgende dag
 // zichtbaar blijft ongeacht welke dagen ESPN in een poll teruggeeft.
 const matchStore = new Map(); // id -> genormaliseerde match (incl. kickoff)
+// Nog niet begonnen wedstrijden (gisteren t/m morgen), los van matchStore
+// zodat de live-tab ze niet ziet - alleen als kandidaat voor koppel-
+// suggesties (zie findLinkCandidates) en om een vooraf gelegde koppeling
+// als "gekoppeld, nog niet begonnen" te herkennen. Elke poll volledig
+// vervangen; zodra een wedstrijd begint verhuist hij vanzelf naar matchStore.
+let upcomingStore = new Map();
 
 let cache = { matches: [], updatedAt: null, error: null };
 let pausedUntil = 0;
@@ -133,14 +139,15 @@ function normalizeMinute(displayClock) {
   return cleaned || null;
 }
 
-function normalizeMatch(event) {
+function normalizeMatch(event, { includeScheduled = false } = {}) {
   const leagueId = (event.uid || '').match(/~l:(\d+)/)?.[1];
   const info = LEAGUE_BY_ESPN_ID.get(leagueId);
   if (!info) return null; // niet een van onze getrackte competities - overslaan
   const status = event.status;
   // Nog niet begonnen: de live-tab toont alleen wat bezig is of net is
   // afgelopen, niet het hele programma van de dag.
-  if (status?.type?.state === 'pre') return null;
+  const scheduled = status?.type?.state === 'pre';
+  if (scheduled && !includeScheduled) return null;
   const competition = event.competitions?.[0];
   const home = competition?.competitors?.find((c) => c.homeAway === 'home');
   const away = competition?.competitors?.find((c) => c.homeAway === 'away');
@@ -152,11 +159,12 @@ function normalizeMatch(event) {
     sortIndex: info.index,
     home: home.team.displayName,
     away: away.team.displayName,
-    homeScore: toScore(home),
-    awayScore: toScore(away),
+    homeScore: scheduled ? null : toScore(home),
+    awayScore: scheduled ? null : toScore(away),
     status: toStatusCode(status), // bv. '1H', 'HT', '2H', 'FT'
     minute: normalizeMinute(status?.displayClock),
     kickoff: event.date || null, // ISO met Z-suffix, echt UTC
+    ...(scheduled ? { scheduled: true } : {}),
   };
 }
 
@@ -236,10 +244,12 @@ function yyyymmdd(date) {
 
 // ESPN's scoreboard is per dag; een wedstrijd van gisteravond laat kan nog
 // lopen (of net afgelopen zijn) terwijl het al een nieuwe UTC-dag is, dus we
-// halen gisteren én vandaag op.
+// halen gisteren én vandaag op - plus morgen, zodat je een pick voor een
+// wedstrijd van morgen al vooraf kunt koppelen.
 async function fetchScoreboardEvents() {
   const now = Date.now();
-  const days = [yyyymmdd(new Date(now - 24 * 60 * 60 * 1000)), yyyymmdd(new Date(now))];
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const days = [yyyymmdd(new Date(now - DAY_MS)), yyyymmdd(new Date(now)), yyyymmdd(new Date(now + DAY_MS))];
   const responses = await Promise.all(days.map((day) => fetch(`${ESPN_SCOREBOARD_URL}?dates=${day}&limit=500`)));
   const events = [];
   for (const response of responses) {
@@ -258,7 +268,9 @@ async function poll() {
   if (Date.now() < pausedUntil) return;
   try {
     const events = await fetchScoreboardEvents();
-    const incoming = events.map(normalizeMatch).filter(Boolean);
+    const normalized = events.map((event) => normalizeMatch(event, { includeScheduled: true })).filter(Boolean);
+    const incoming = normalized.filter((m) => !m.scheduled);
+    upcomingStore = new Map(normalized.filter((m) => m.scheduled && !matchStore.has(m.id)).map((m) => [m.id, m]));
     const incomingIds = new Set(incoming.map((m) => m.id));
     // ESPN levert een afgelopen wedstrijd gewoon met FT, dus dit hoort zelden
     // te gebeuren. Valt een in-play wedstrijd toch uit de response (bv. een
@@ -342,7 +354,45 @@ export function findLiveMatchIdFor(params) {
 // tonen, net als een mislukte automatische match).
 export function getLiveMatchOverlayById(liveId) {
   const live = matchStore.get(liveId);
-  return live ? toOverlay(live) : null;
+  if (live) return toOverlay(live);
+  // Vooraf gekoppeld aan een wedstrijd die nog moet beginnen: wel "gevonden"
+  // (dus geen koppelknop meer), alleen nog zonder score.
+  return upcomingStore.has(liveId) ? { homeScore: null, awayScore: null, status: 'scheduled', minute: null } : null;
+}
+
+// Koppelsuggesties (zie GET /api/live-link-suggestions in index.js): alle
+// wedstrijden uit de feed - bezig, afgelopen of nog te beginnen - met een
+// losse teamnaam-score, beste eerst. Thuis/uit moeten allebei een beetje
+// lijken (min 50%), anders matcht elk "United"-duel. Een bekende aftraptijd
+// filtert kandidaten die er ver naast zitten en geeft een kleine bonus als
+// hij vrijwel klopt.
+const MIN_TEAM_SCORE = 0.5;
+export function findLinkCandidates({ home, away, kickoff }, limit = 3) {
+  const kickoffMs = kickoff ? new Date(kickoff).getTime() : null;
+  const candidates = [];
+  for (const live of [...matchStore.values(), ...upcomingStore.values()]) {
+    const homeScore = teamNameSimilarity(live.home, home);
+    const awayScore = teamNameSimilarity(live.away, away);
+    if (homeScore < MIN_TEAM_SCORE || awayScore < MIN_TEAM_SCORE) continue;
+    let score = (homeScore + awayScore) / 2;
+    if (kickoffMs !== null && live.kickoff) {
+      const diff = Math.abs(parseKickoffUtc(live.kickoff).getTime() - kickoffMs);
+      if (diff > MATCH_TIME_WINDOW_MS) continue;
+      if (diff <= 15 * 60 * 1000) score = Math.min(1, score + 0.1);
+    }
+    candidates.push({
+      id: live.id,
+      league: live.league,
+      home: live.home,
+      away: live.away,
+      kickoff: live.kickoff,
+      status: live.status,
+      homeScore: live.homeScore,
+      awayScore: live.awayScore,
+      score: Math.round(score * 100) / 100,
+    });
+  }
+  return candidates.sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
 // Voor de detailpagina (zie matchDetail.js): de opgeslagen match zelf.

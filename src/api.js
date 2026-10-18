@@ -72,6 +72,7 @@ export const api = {
         kickoff: liveMatch.kickoff,
       }),
     }),
+  getLinkSuggestions: () => request('/api/live-link-suggestions'),
   favoriteMatch: (liveId) => request(`/api/favorites/${encodeURIComponent(liveId)}`, { method: 'POST' }),
   unfavoriteMatch: (liveId) => request(`/api/favorites/${encodeURIComponent(liveId)}`, { method: 'DELETE' }),
   getPlannedBets: () => request('/api/planned-bets'),

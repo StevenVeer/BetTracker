@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { describeBet } from '../markets.js';
-import { formatKickoff, legLabel, ScoreBadge } from './BetList.jsx';
+import { formatKickoff, legKickoff, legLabel, ScoreBadge } from './BetList.jsx';
 
 // Picks van dezelfde wedstrijd onder één kop, op aftrap gesorteerd. De
 // live-koppelstatus hangt aan de match (één keer in de kop); handmatig
@@ -14,7 +14,7 @@ function groupPicks(picks) {
     groups.get(key).picks.push(pick);
   }
   const time = (g) => {
-    const t = g.picks[0].match?.commenceTime;
+    const t = legKickoff(g.picks[0]);
     return t ? new Date(t).getTime() : Infinity;
   };
   return [...groups.values()].sort((a, b) => time(a) - time(b));
@@ -56,7 +56,7 @@ export default function OpenBetsModal({
                     <div className="ob-group-title">
                       <strong>{legLabel(first)}</strong>
                       <span>
-                        {first.match ? `${formatKickoff(first.match.commenceTime)} · ` : ''}
+                        {legKickoff(first) ? `${formatKickoff(legKickoff(first))} · ` : ''}
                         {count} {count === 1 ? 'pick' : 'picks'}
                       </span>
                     </div>

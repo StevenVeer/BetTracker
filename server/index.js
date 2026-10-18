@@ -7,7 +7,7 @@ import { parseTelegramMessage, isResultRecap } from './telegramParser.js';
 import { teamNamesMatch } from './teamMatch.js';
 import { startTelegramListener, backfillMessages } from './telegramClient.js';
 import { buildReportExport } from './reportGenerator.js';
-import { getLiveScores, startLiveScoresPoller, findLiveMatchFor, findLiveMatchIdFor, getLiveMatchOverlayById, amsterdamDateParts, amsterdamWallTimeToUtcMs, parseKickoffUtc, FINISHED_STATUSES } from './liveScores.js';
+import { getLiveScores, startLiveScoresPoller, findLiveMatchFor, findLiveMatchIdFor, getLiveMatchOverlayById, findLinkCandidates, amsterdamDateParts, amsterdamWallTimeToUtcMs, parseKickoffUtc, FINISHED_STATUSES } from './liveScores.js';
 import { getMatchDetail } from './matchDetail.js';
 import { LEAGUES } from './leagues.js';
 import { extractBetsFromImages, extractBetsFromText } from './screenshotImport.js';
@@ -629,7 +629,7 @@ const LEG_STATUSES = ['open', 'won', 'lost', 'void'];
 // die ene leg; de totale odds van de bet pas je apart aan.
 app.patch('/api/bet-legs/:id', async (req, res) => {
   const { id } = req.params;
-  const { status, odds } = req.body;
+  const { status, odds, kickoffAt } = req.body;
   const updates = {};
   if (status !== undefined) {
     if (!LEG_STATUSES.includes(status)) {
@@ -644,6 +644,21 @@ app.patch('/api/bet-legs/:id', async (req, res) => {
       return;
     }
     updates.odds = Number(odds);
+  }
+  // Aftraptijd van een handmatige selectie (zie de Starttijden-modal in de
+  // client). Een leg met een gekoppelde wedstrijd haalt zijn tijd uit die
+  // matches-rij, dus daar heeft dit veld geen betekenis. null wist hem weer.
+  if (kickoffAt !== undefined) {
+    if (kickoffAt !== null && Number.isNaN(new Date(kickoffAt).getTime())) {
+      res.status(400).json({ error: 'kickoffAt is geen geldige datum/tijd' });
+      return;
+    }
+    const { rows: legRows } = await pool.query('select match_id from bet_legs where id = $1', [id]);
+    if (legRows[0]?.match_id) {
+      res.status(400).json({ error: 'Deze selectie hangt aan een wedstrijd - de starttijd komt daarvandaan' });
+      return;
+    }
+    updates.kickoff_at = kickoffAt === null ? null : new Date(kickoffAt);
   }
   const fields = Object.keys(updates);
   if (fields.length === 0) {
@@ -1997,6 +2012,69 @@ app.get('/api/live-scores/open-matches', async (req, res) => {
     }
     const feed = getLiveScores();
     res.json({ matches, updatedAt: new Date().toISOString(), feedUpdatedAt: feed.updatedAt, feedError: feed.error });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// "Teamnaam - Teamnaam" uit een handmatige selectie (screenshot-import,
+// vrije invoer) - de koppelsuggesties hebben losse thuis/uit-namen nodig.
+function splitManualLabel(label) {
+  const parts = (label || '').split(/\s+(?:-|–|—|vs\.?|v)\s+/i);
+  return parts.length === 2 && parts[0].trim() && parts[1].trim() ? { home: parts[0].trim(), away: parts[1].trim() } : null;
+}
+
+// Koppelsuggesties: elke open pick die nog niet aan een live wedstrijd hangt
+// (niet handmatig gekoppeld én niet automatisch gevonden), met de best
+// lijkende wedstrijden uit de ESPN-feed - ook al begint die pas later
+// vandaag/morgen. Puur een lijstje om met één klik te bevestigen; koppelen
+// zelf loopt via de bestaande live-link-routes hieronder. Picks op dezelfde
+// wedstrijd (zelfde match, of zelfde handmatige naam + tijd) staan als één
+// item met meerdere legIds.
+app.get('/api/live-link-suggestions', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      select l.id as leg_id, l.match_id, l.manual_label, l.kickoff_at, l.market, l.selection, l.line,
+        b.source, m.home, m.away, m.competition, m.commence_time, m.tsdb_live_id
+      from bet_legs l
+      join bets b on b.id = l.bet_id
+      left join matches m on m.id = l.match_id
+      where b.status = 'open' and l.status = 'open'
+      order by coalesce(m.commence_time, l.kickoff_at) nulls last, l.position
+    `);
+    const items = new Map();
+    for (const row of rows) {
+      if (row.tsdb_live_id && getLiveMatchOverlayById(row.tsdb_live_id)) continue;
+      let teams;
+      let kickoff;
+      let key;
+      if (row.match_id) {
+        if (findLiveMatchIdFor({ home: row.home, away: row.away, competition: row.competition, commenceTime: row.commence_time })) continue;
+        teams = { home: row.home, away: row.away };
+        kickoff = row.commence_time;
+        key = `m:${row.match_id}`;
+      } else {
+        teams = splitManualLabel(row.manual_label);
+        kickoff = row.kickoff_at;
+        key = `l:${row.source}:${(row.manual_label || row.leg_id).toLowerCase()}:${kickoff ? new Date(kickoff).getTime() : ''}`;
+      }
+      if (!items.has(key)) {
+        items.set(key, {
+          key,
+          source: row.source,
+          matchId: row.match_id,
+          legIds: [],
+          label: row.match_id ? `${row.home} – ${row.away}` : row.manual_label || 'Handmatige selectie',
+          kickoff: kickoff || null,
+          picks: [],
+          candidates: teams ? findLinkCandidates({ ...teams, kickoff }) : [],
+        });
+      }
+      const item = items.get(key);
+      item.legIds.push(row.leg_id);
+      item.picks.push({ market: row.market, selection: row.selection, line: row.line !== null ? Number(row.line) : null });
+    }
+    res.json({ items: [...items.values()] });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

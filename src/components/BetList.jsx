@@ -15,13 +15,19 @@ export function formatKickoff(iso) {
   });
 }
 
+// Aftrap van een leg: van de gekoppelde wedstrijd, anders de handmatig
+// ingevulde starttijd (screenshot-import of de Starttijden-modal).
+export function legKickoff(leg) {
+  return leg.match?.commenceTime || leg.kickoffAt || null;
+}
+
 export function legLabel(leg) {
   return leg.match ? `${leg.match.home} – ${leg.match.away}` : leg.manualLabel || 'Handmatige selectie';
 }
 
 // Voor <input type="datetime-local">, dat een waarde zonder tijdzone
 // verwacht (YYYY-MM-DDTHH:mm) in de lokale tijd van de browser.
-function toDatetimeLocalValue(iso) {
+export function toDatetimeLocalValue(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   const pad = (n) => String(n).padStart(2, '0');
@@ -178,7 +184,7 @@ function LegRow({ leg, onLiveLinked }) {
         <span className="leg-match">{legLabel(leg)}</span>
         <span className="muted">
           {describeBet(leg)}
-          {leg.match ? ` · ${formatKickoff(leg.match.commenceTime)}` : ''}
+          {legKickoff(leg) ? ` · ${formatKickoff(legKickoff(leg))}` : ''}
         </span>
       </div>
       <ScoreBadge leg={leg} onLinked={onLiveLinked} />
