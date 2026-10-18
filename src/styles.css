@@ -3787,3 +3787,9 @@ body {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+.bet-list-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}

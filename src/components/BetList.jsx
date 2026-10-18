@@ -604,8 +604,15 @@ function sortParlayLegs(legs, mode) {
   return [...legs].sort((a, b) => time(a) - time(b));
 }
 
+// Lange lijsten (vooral Alle/Gewonnen/Verloren) tonen eerst de 10 meest
+// recente bets - de server levert ze al op placed_at aflopend - en elke klik
+// op "Toon meer" voegt er 10 aan toe. Wisselen van filter remount de lijst
+// (key in App.jsx), dus dan begin je weer bij 10.
+const PAGE_SIZE = 10;
+
 export default function BetList({ bets, onUpdate, onUpdateLeg, onDelete, onLiveLinked }) {
   const [editingId, setEditingId] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [parlaySort, setParlaySort] = useState(readParlaySort);
 
   function toggleParlaySort(betId) {
@@ -629,7 +636,7 @@ export default function BetList({ bets, onUpdate, onUpdateLeg, onDelete, onLiveL
   return (
     <>
       <ul className="bet-list">
-        {bets.map((bet) => {
+        {bets.slice(0, visibleCount).map((bet) => {
           const isCombi = bet.legs.length > 1;
           const sortMode = parlaySort[bet.id] ? 'time' : 'default';
           const boosted = isBoostedBet(bet);
@@ -737,6 +744,14 @@ export default function BetList({ bets, onUpdate, onUpdateLeg, onDelete, onLiveL
           );
         })}
       </ul>
+      {bets.length > visibleCount && (
+        <div className="bet-list-more">
+          <button type="button" className="btn tool-btn" onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}>
+            Toon meer
+            <span className="open-bets-count">{bets.length - visibleCount}</span>
+          </button>
+        </div>
+      )}
       {editingBet && (
         <EditBetModal
           key={editingBet.id}

@@ -534,6 +534,7 @@ export default function App() {
             </p>
           )}
           <BetList
+            key={`telegram-${telegramFilter}`}
             bets={visibleTelegramBets}
             onUpdate={handleTelegramUpdate}
             onUpdateLeg={handleTelegramLegUpdate}
@@ -601,6 +602,7 @@ export default function App() {
             <p className="hint-text">Laden…</p>
           ) : (
             <BetList
+              key={`own-${filter}`}
               bets={visibleBets}
               onUpdate={handleUpdate}
               onUpdateLeg={handleLegUpdate}
