@@ -3,12 +3,12 @@ import { api } from '../api.js';
 
 const EUROPEAN_COUNTRIES = new Set([
   'England', 'Spain', 'Germany', 'Italy', 'France', 'Netherlands',
-  'Portugal', 'Belgium', 'Sweden', 'Norway', 'Turkey', 'Europe',
+  'Portugal', 'Belgium', 'Scotland', 'Switzerland', 'Sweden', 'Norway', 'Turkey', 'Europe',
 ]);
 
 const COUNTRY_CODES = {
   England: 'EN', Spain: 'ES', Germany: 'DE', Italy: 'IT', France: 'FR',
-  Netherlands: 'NL', Portugal: 'PT', Belgium: 'BE',
+  Netherlands: 'NL', Portugal: 'PT', Belgium: 'BE', Scotland: 'SC', Switzerland: 'CH',
   Sweden: 'SE', Norway: 'NO', Turkey: 'TR', USA: 'US',
 };
 
