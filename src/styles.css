@@ -3793,3 +3793,13 @@ body {
   justify-content: center;
   margin-top: 14px;
 }
+
+.md-settle-picks .ob-pick {
+  padding: 10px 0;
+}
+.md-settle-picks .ob-pick + .ob-pick {
+  border-top: 1px dashed rgba(244, 242, 232, 0.1);
+}
+.md-settle-picks .pick-line {
+  font-size: 13.5px;
+}

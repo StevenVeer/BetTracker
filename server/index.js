@@ -1846,7 +1846,8 @@ app.get('/api/scores/usage', async (req, res) => {
 async function getFavoriteState() {
   const [legRows, overrideRows] = await Promise.all([
     pool.query(`
-      select l.market, l.selection, l.line,
+      select l.id as leg_id, l.market, l.selection, l.line, l.odds, b.bookmaker,
+        (select count(*) from bet_legs x where x.bet_id = b.id) > 1 as is_combi,
         m.id as match_id, m.home, m.away, m.competition, m.commence_time, m.tsdb_live_id
       from matches m
       join bet_legs l on l.match_id = m.id
@@ -1874,7 +1875,16 @@ async function getFavoriteState() {
       tsdbIdByMatchId.set(row.match_id, tsdbId);
     }
     if (!tsdbId) continue;
-    const pick = { market: row.market, selection: row.selection, line: row.line !== null ? Number(row.line) : null };
+    // legId/odds/bookmaker/isCombi voor de hit/mis-knoppen op de detailpagina.
+    const pick = {
+      legId: row.leg_id,
+      market: row.market,
+      selection: row.selection,
+      line: row.line !== null ? Number(row.line) : null,
+      odds: Number(row.odds),
+      bookmaker: row.bookmaker,
+      isCombi: row.is_combi,
+    };
     if (!picksByTsdbId.has(tsdbId)) picksByTsdbId.set(tsdbId, [pick]);
     else picksByTsdbId.get(tsdbId).push(pick);
   }

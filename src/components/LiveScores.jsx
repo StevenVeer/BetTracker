@@ -90,7 +90,7 @@ function FavoriteCard({ match: m, onToggleFavorite, onOpen }) {
   );
 }
 
-export default function LiveScores() {
+export default function LiveScores({ onSettleLeg }) {
   const [state, setState] = useState({ matches: [], updatedAt: null, error: null });
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState(null);
@@ -140,7 +140,7 @@ export default function LiveScores() {
 
   const openMatch = openId ? state.matches.find((m) => m.id === openId) : null;
   if (openMatch) {
-    return <MatchDetail listMatch={openMatch} onBack={() => setOpenId(null)} onToggleFavorite={toggleFavorite} />;
+    return <MatchDetail listMatch={openMatch} onBack={() => setOpenId(null)} onToggleFavorite={toggleFavorite} onSettleLeg={onSettleLeg} />;
   }
 
   const open = (m) => setOpenId(m.id);

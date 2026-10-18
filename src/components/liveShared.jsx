@@ -75,6 +75,53 @@ export function PickLines({ picks, match }) {
   );
 }
 
+// Picks op de detailpagina met dezelfde hit/mis-knoppen als in de Open
+// bets-popup. Net afgehandelde picks blijven met hun uitslag staan.
+export function SettlePickRows({ openPicks, settledPicks, match, onSettle }) {
+  const row = (p, actions) => (
+    <div className="ob-pick" key={p.legId || p.selection}>
+      <div className="ob-pick-info">
+        <span className="ob-pick-name">
+          <span className="pick-line">
+            <span className="market">{MARKET_ABBR[p.market] || p.market}</span>
+            {pickLabel(p, match)}
+          </span>
+        </span>
+        {p.bookmaker && (
+          <span className="ob-pick-meta">
+            <span className="ob-bk">{p.bookmaker}</span>
+            {p.isCombi && <span className="ob-combi">combi</span>}
+          </span>
+        )}
+      </div>
+      {p.odds ? <span className="ob-odds">@ {Number(p.odds).toFixed(2)}</span> : null}
+      {actions}
+    </div>
+  );
+  return (
+    <div className="md-settle-picks">
+      {openPicks.map((p) =>
+        row(
+          p,
+          p.legId ? (
+            <span className="ob-actions">
+              <button type="button" className="ob-btn ob-won" title="Gewonnen" aria-label="Gewonnen" onClick={() => onSettle(p, 'won')}>
+                ✓
+              </button>
+              <button type="button" className="ob-btn ob-lost" title="Verloren" aria-label="Verloren" onClick={() => onSettle(p, 'lost')}>
+                ✕
+              </button>
+            </span>
+          ) : null
+        )
+      )}
+      {settledPicks.map((p) =>
+        row(p, <span className={`leg-status leg-status-${p.status}`}>{p.status === 'won' ? 'Gewonnen' : 'Verloren'}</span>)
+      )}
+    </div>
+  );
+}
+
 // Klikbare rij/kaart: echte knop-semantiek (toetsenbord + schermlezer)
 // zonder de bestaande div-layout om te bouwen naar <button>.
 export function openProps(onOpen) {

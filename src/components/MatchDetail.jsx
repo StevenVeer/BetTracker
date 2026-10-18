@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { FavoriteButton, IN_PLAY_STATUSES, PickLines, statusLabel } from './liveShared.jsx';
+import { FavoriteButton, IN_PLAY_STATUSES, PickLines, SettlePickRows, statusLabel } from './liveShared.jsx';
 import InlineIcon from './InlineIcon.jsx';
 
 // Zelfde interval als het live-overzicht; de server cachet 15 s per wedstrijd,
@@ -246,11 +246,12 @@ function LineupPitch({ lineups, match }) {
   );
 }
 
-export default function MatchDetail({ listMatch, onBack, onToggleFavorite }) {
+export default function MatchDetail({ listMatch, onBack, onToggleFavorite, onSettleLeg }) {
   const id = listMatch.id;
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [settled, setSettled] = useState({}); // legId -> pick + status
 
   useEffect(() => {
     let cancelled = false;
@@ -290,7 +291,23 @@ export default function MatchDetail({ listMatch, onBack, onToggleFavorite }) {
   // ster-toggle op.
   const base = detail?.match || listMatch;
   const match = { ...base, favorite: listMatch.favorite, favoriteSource: listMatch.favoriteSource };
-  const picks = base.picks || listMatch.picks;
+  const picks = base.picks || listMatch.picks || [];
+  // Een afgehandelde pick valt bij de volgende poll uit `picks` (die bevat
+  // alleen open legs) - hier vasthouden zodat je ziet wat je net hebt
+  // aangeklikt. Terugdraaien kan via bewerken in de bets-lijst: de server
+  // heropent een al afgehandelde combi niet vanzelf.
+  const settledPicks = Object.values(settled);
+  const openPicks = picks.filter((p) => !p.legId || !settled[p.legId]);
+
+  async function settle(pick, status) {
+    setSettled((s) => ({ ...s, [pick.legId]: { ...pick, status } }));
+    try {
+      await onSettleLeg(pick.legId, { status });
+    } catch {
+      setSettled(({ [pick.legId]: _, ...rest }) => rest);
+    }
+  }
+
   const live = IN_PLAY_STATUSES.has(match.status) || match.status === 'HT';
 
   return (
@@ -321,10 +338,14 @@ export default function MatchDetail({ listMatch, onBack, onToggleFavorite }) {
 
       {error && <p className="error-text">{error}</p>}
 
-      {picks && picks.length > 0 && (
+      {(openPicks.length > 0 || settledPicks.length > 0) && (
         <div className="md-card is-picks">
           <div className="md-card-title">Jouw picks op deze wedstrijd</div>
-          <PickLines picks={picks} match={match} />
+          {onSettleLeg ? (
+            <SettlePickRows openPicks={openPicks} settledPicks={settledPicks} match={match} onSettle={settle} />
+          ) : (
+            <PickLines picks={openPicks} match={match} />
+          )}
         </div>
       )}
 

@@ -461,7 +461,7 @@ export default function App() {
       {view === 'overview' ? (
         <Overview bets={bets} telegramBets={telegramBets} />
       ) : view === 'live' ? (
-        <LiveScores />
+        <LiveScores onSettleLeg={handleLegUpdate} />
       ) : view === 'telegram' ? (
         <>
           <div className="toolbar">
