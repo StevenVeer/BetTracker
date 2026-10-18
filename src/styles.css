@@ -635,6 +635,9 @@ body {
 }
 
 .btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   border-color: rgba(232, 178, 61, 0.45);
   color: var(--gold);
 }
@@ -1671,6 +1674,33 @@ body {
   margin-bottom: 8px;
   /* ruimte voor de knoppen rechtsboven, die lager niets meer in de weg zitten */
   padding-right: 56px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.parlay-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(244, 242, 232, 0.2);
+  background: transparent;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-family: 'Oswald', sans-serif;
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(244, 242, 232, 0.6);
+  cursor: pointer;
+}
+.parlay-sort-btn:hover {
+  border-color: rgba(232, 178, 61, 0.5);
+  color: var(--gold);
+}
+.parlay-sort-btn.is-active {
+  border-color: rgba(232, 178, 61, 0.45);
+  color: var(--gold);
 }
 .leg-list {
   display: flex;
@@ -3747,4 +3777,13 @@ body {
 .kickoff-edit-row input[type='datetime-local']:focus {
   outline: none;
   border-color: var(--gold);
+}
+
+.inline-icon {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }

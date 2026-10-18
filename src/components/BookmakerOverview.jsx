@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { Amount } from './AmountsToggle.jsx';
 import DecimalInput from './DecimalInput.jsx';
+import InlineIcon from './InlineIcon.jsx';
 
 function formatEUR(n) {
   return (
@@ -162,7 +163,7 @@ function LedgerDetail({ bookmaker, onBack, onChanged }) {
       <div className="card-header">
         <h3>{bookmaker}</h3>
         <button type="button" className="btn btn-back" onClick={onBack}>
-          ← Terug naar overzicht
+          <InlineIcon name="arrow-left" /> Terug naar overzicht
         </button>
       </div>
 
@@ -257,7 +258,7 @@ function IngLedger({ onBack, onChanged }) {
           ING
         </h3>
         <button type="button" className="btn btn-back" onClick={onBack}>
-          ← Terug naar overzicht
+          <InlineIcon name="arrow-left" /> Terug naar overzicht
         </button>
       </div>
 

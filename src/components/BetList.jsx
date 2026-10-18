@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { Amount } from './AmountsToggle.jsx';
 import { betOutcome } from '../dailyResults.js';
 import DecimalInput from './DecimalInput.jsx';
+import InlineIcon from './InlineIcon.jsx';
 
 export function formatKickoff(iso) {
   if (!iso) return '—';
@@ -582,8 +583,42 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
   );
 }
 
+// Volgorde van de picks in een parlay: 'default' = zoals ingevoerd, 'time' =
+// vroegste aftrap eerst (picks zonder starttijd achteraan). Per parlay apart
+// gekozen en onthouden in localStorage als { [betId]: true } - alleen de
+// parlays die op tijd staan, de rest is standaard.
+const PARLAY_SORT_KEY = 'bettracker.parlaySortByTime';
+
+function readParlaySort() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PARLAY_SORT_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function sortParlayLegs(legs, mode) {
+  if (mode !== 'time') return legs;
+  const time = (leg) => (legKickoff(leg) ? new Date(legKickoff(leg)).getTime() : Infinity);
+  return [...legs].sort((a, b) => time(a) - time(b));
+}
+
 export default function BetList({ bets, onUpdate, onUpdateLeg, onDelete, onLiveLinked }) {
   const [editingId, setEditingId] = useState(null);
+  const [parlaySort, setParlaySort] = useState(readParlaySort);
+
+  function toggleParlaySort(betId) {
+    const next = { ...parlaySort };
+    if (next[betId]) delete next[betId];
+    else next[betId] = true;
+    setParlaySort(next);
+    try {
+      localStorage.setItem(PARLAY_SORT_KEY, JSON.stringify(next));
+    } catch {
+      // localStorage geblokkeerd (privémodus) - dan geldt de keuze alleen deze sessie.
+    }
+  }
   const [cashoutId, setCashoutId] = useState(null);
   const editingBet = editingId ? bets.find((b) => b.id === editingId) : null;
 
@@ -596,6 +631,7 @@ export default function BetList({ bets, onUpdate, onUpdateLeg, onDelete, onLiveL
       <ul className="bet-list">
         {bets.map((bet) => {
           const isCombi = bet.legs.length > 1;
+          const sortMode = parlaySort[bet.id] ? 'time' : 'default';
           const boosted = isBoostedBet(bet);
           const rawOdds = bet.legs.reduce((acc, leg) => acc * Number(leg.odds), 1);
           const oddsCell = (
@@ -619,9 +655,18 @@ export default function BetList({ bets, onUpdate, onUpdateLeg, onDelete, onLiveL
                 <>
                   <div className="bet-combi-heading">
                     <span className="muted">Combi · {bet.legs.length} selecties · {bet.bookmaker}</span>
+                    <button
+                      type="button"
+                      className={`parlay-sort-btn${sortMode === 'time' ? ' is-active' : ''}`}
+                      onClick={() => toggleParlaySort(bet.id)}
+                      title={sortMode === 'time' ? 'Gesorteerd op starttijd - klik voor standaardvolgorde' : 'Standaardvolgorde - klik om op starttijd te sorteren'}
+                    >
+                      <InlineIcon name={sortMode === 'time' ? 'sort-time' : 'sort-default'} size={11} />
+                      {sortMode === 'time' ? 'Tijd' : 'Standaard'}
+                    </button>
                   </div>
                   <div className="leg-list">
-                    {bet.legs.map((leg) => (
+                    {sortParlayLegs(bet.legs, sortMode).map((leg) => (
                       <LegRow key={leg.id} leg={leg} onLiveLinked={onLiveLinked} />
                     ))}
                   </div>

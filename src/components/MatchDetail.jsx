@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { FavoriteButton, IN_PLAY_STATUSES, PickLines, statusLabel } from './liveShared.jsx';
+import InlineIcon from './InlineIcon.jsx';
 
 // Zelfde interval als het live-overzicht; de server cachet 15 s per wedstrijd,
 // dus vaker vragen levert niets op.
@@ -296,7 +297,7 @@ export default function MatchDetail({ listMatch, onBack, onToggleFavorite }) {
     <div className="live-scores match-detail">
       <div className="md-top">
         <button type="button" className="btn btn-back btn-small" onClick={onBack}>
-          ← Live
+          <InlineIcon name="arrow-left" /> Live
         </button>
         <span className="md-league">{match.league}</span>
         <FavoriteButton match={match} onToggle={onToggleFavorite} />

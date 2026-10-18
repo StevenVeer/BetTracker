@@ -4,6 +4,7 @@ import { legLabel } from './BetList.jsx';
 import { STATUS_LABELS } from '../markets.js';
 import EquityCurve from './EquityCurve.jsx';
 import { Amount } from './AmountsToggle.jsx';
+import InlineIcon from './InlineIcon.jsx';
 
 function fmt(n) {
   return Number(n).toFixed(2);
@@ -38,7 +39,7 @@ function DayDetail({ day, onBack }) {
       <div className="card-header">
         <h3>{formatDate(day.date)}</h3>
         <button type="button" className="btn btn-back" onClick={onBack}>
-          ← Terug naar overzicht
+          <InlineIcon name="arrow-left" /> Terug naar overzicht
         </button>
       </div>
       <div className="ledger-balance">
