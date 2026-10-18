@@ -28,6 +28,7 @@ export const LEAGUES = [
   { key: 'soccer_spain_copa_del_rey', name: 'Copa del Rey', country: 'Spain', tier: 'other' },
   { key: 'soccer_switzerland_superleague', name: 'Swiss Super League', country: 'Switzerland', tier: 'other' },
   { key: 'soccer_belgium_first_div', name: 'Pro League', country: 'Belgium', tier: 'other' },
+  { key: 'soccer_turkey_super_league', name: 'Süper Lig', country: 'Turkey', tier: 'other' },
   { key: 'soccer_sweden_allsvenskan', name: 'Allsvenskan', country: 'Sweden', tier: 'other' },
   { key: 'soccer_norway_eliteserien', name: 'Eliteserien', country: 'Norway', tier: 'other' },
   { key: 'soccer_usa_mls', name: 'MLS', country: 'USA', tier: 'other' },

@@ -3,13 +3,13 @@ import { api } from '../api.js';
 
 const EUROPEAN_COUNTRIES = new Set([
   'England', 'Spain', 'Germany', 'Italy', 'France', 'Netherlands',
-  'Portugal', 'Belgium', 'Sweden', 'Norway', 'Europe',
+  'Portugal', 'Belgium', 'Sweden', 'Norway', 'Turkey', 'Europe',
 ]);
 
 const COUNTRY_CODES = {
   England: 'EN', Spain: 'ES', Germany: 'DE', Italy: 'IT', France: 'FR',
   Netherlands: 'NL', Portugal: 'PT', Belgium: 'BE',
-  Sweden: 'SE', Norway: 'NO', USA: 'US',
+  Sweden: 'SE', Norway: 'NO', Turkey: 'TR', USA: 'US',
 };
 
 function countryLabel(country) {

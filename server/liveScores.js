@@ -45,6 +45,7 @@ const ESPN_LEAGUE_IDS = {
   soccer_spain_copa_del_rey: '3951',
   soccer_switzerland_superleague: '3944',
   soccer_belgium_first_div: '3901',
+  soccer_turkey_super_league: '3946',
   soccer_sweden_allsvenskan: '3945',
   soccer_norway_eliteserien: '3960',
   soccer_usa_mls: '770',
