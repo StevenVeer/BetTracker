@@ -193,6 +193,13 @@ export default function App() {
     loadTelegramBets();
   }
 
+  // Bij openen altijd vers ophalen - de lijst van de laatste poll kan nog van
+  // vóór een net toegevoegde bet zijn.
+  function openSuggestions(source) {
+    setSuggestionsSource(source);
+    loadLinkSuggestions();
+  }
+
   useEffect(() => {
     loadLiveOverlay();
     loadLinkSuggestions();
@@ -281,6 +288,7 @@ export default function App() {
     try {
       const updated = await api.updateLeg(legId, patch);
       setTelegramBets((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+      loadLinkSuggestions();
     } catch (err) {
       setError(err.message);
     }
@@ -290,6 +298,7 @@ export default function App() {
     try {
       await api.deleteBet(id);
       setTelegramBets((prev) => prev.filter((b) => b.id !== id));
+      loadLinkSuggestions();
     } catch (err) {
       setError(err.message);
     }
@@ -342,8 +351,11 @@ export default function App() {
     [manualOpenPicks]
   );
 
+  // Nieuwe picks (formulier, import/extensie, geplande bet) moeten meteen in
+  // de koppelsuggesties staan, niet pas na de volgende poll-cyclus.
   async function handleCreated(bet) {
     setBets((prev) => [bet, ...prev]);
+    loadLinkSuggestions();
   }
 
   function handlePlannedCreated(planned) {
@@ -367,6 +379,7 @@ export default function App() {
     try {
       const updated = await api.updateLeg(legId, patch);
       setBets((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+      loadLinkSuggestions();
     } catch (err) {
       setError(err.message);
     }
@@ -376,6 +389,7 @@ export default function App() {
     try {
       await api.deleteBet(id);
       setBets((prev) => prev.filter((b) => b.id !== id));
+      loadLinkSuggestions();
     } catch (err) {
       setError(err.message);
     }
@@ -497,7 +511,7 @@ export default function App() {
                   icon="link"
                   label="Koppelsuggesties"
                   count={countWithCandidates(telegramSuggestions)}
-                  onClick={() => setSuggestionsSource('telegram')}
+                  onClick={() => openSuggestions('telegram')}
                 />
               )}
             </div>
@@ -577,7 +591,7 @@ export default function App() {
                 icon="link"
                 label="Koppelsuggesties"
                 count={countWithCandidates(ownSuggestions)}
-                onClick={() => setSuggestionsSource('manual')}
+                onClick={() => openSuggestions('manual')}
               />
               <CountButton
                 icon="clock"
