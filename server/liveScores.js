@@ -49,6 +49,7 @@ const ESPN_LEAGUE_IDS = {
   soccer_sweden_allsvenskan: '3945',
   soccer_norway_eliteserien: '3960',
   soccer_usa_mls: '770',
+  soccer_saudi_arabia_pro_league: '21231',
   soccer_fifa_world_cup: '606',
   soccer_uefa_european_championship: '781',
   soccer_uefa_nations_league: '2395',

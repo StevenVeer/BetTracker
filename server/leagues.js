@@ -32,6 +32,7 @@ export const LEAGUES = [
   { key: 'soccer_sweden_allsvenskan', name: 'Allsvenskan', country: 'Sweden', tier: 'other' },
   { key: 'soccer_norway_eliteserien', name: 'Eliteserien', country: 'Norway', tier: 'other' },
   { key: 'soccer_usa_mls', name: 'MLS', country: 'USA', tier: 'other' },
+  { key: 'soccer_saudi_arabia_pro_league', name: 'Saudi Pro League', country: 'Saudi Arabia', tier: 'other' },
   { key: 'soccer_fifa_world_cup', name: 'WK', country: 'International', tier: 'other' },
   { key: 'soccer_uefa_european_championship', name: 'EK', country: 'International', tier: 'other' },
   { key: 'soccer_uefa_nations_league', name: 'UEFA Nations League', country: 'International', tier: 'other' },

@@ -9,7 +9,7 @@ const EUROPEAN_COUNTRIES = new Set([
 const COUNTRY_CODES = {
   England: 'EN', Spain: 'ES', Germany: 'DE', Italy: 'IT', France: 'FR',
   Netherlands: 'NL', Portugal: 'PT', Belgium: 'BE', Scotland: 'SC', Switzerland: 'CH',
-  Sweden: 'SE', Norway: 'NO', Turkey: 'TR', USA: 'US',
+  Sweden: 'SE', Norway: 'NO', Turkey: 'TR', USA: 'US', 'Saudi Arabia': 'SA',
 };
 
 function countryLabel(country) {
