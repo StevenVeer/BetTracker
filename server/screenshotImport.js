@@ -35,7 +35,19 @@ const EXTRACT_TOOL = {
                   home: { type: ['string', 'null'], description: 'Thuisteam/speler 1.' },
                   away: { type: ['string', 'null'], description: 'Uitteam/speler 2.' },
                   selection: { type: 'string', description: 'De gekozen uitkomst letterlijk zoals op de slip, inclusief markt en teamnaam (bv. "Reguliere speeltijd: Engeland", "Eerste doelpuntenmaker: Harry Kane", "Beide teams scoren: Ja"). Niet herformuleren of vertalen, zodat er nooit een verkeerd team in komt; alleen vertalen als de slip niet in het Nederlands is.' },
-                  odds: { type: ['number', 'null'], description: 'Odds van deze selectie.' },
+                  odds: { type: ['number', 'null'], description: 'Odds van deze selectie (bij een bet builder de gezamenlijke odd).' },
+                  parts: {
+                    type: ['array', 'null'],
+                    description: 'Alleen bij een bet builder (meerdere selecties op deze wedstrijd met één gezamenlijke odd): de losse onderdelen, in de volgorde van de slip. Anders null.',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        market: { type: ['string', 'null'], description: 'De markt letterlijk zoals op de slip (bv. "Aantal Goals - Over/Under 2.5", "Beide Teams Scoren"), of null als alleen de keuze zichtbaar is.' },
+                        pick: { type: 'string', description: 'De gekozen uitkomst letterlijk zoals op de slip (bv. "Over 2.5", "Ja").' },
+                      },
+                      required: ['pick'],
+                    },
+                  },
                   kickoffAt: { type: ['string', 'null'], description: 'Aftrap (datum + tijd) van deze wedstrijd als lokale Nederlandse tijd "YYYY-MM-DDTHH:mm" zonder tijdzone, alleen als zichtbaar op de slip. Anders null.' },
                 },
                 required: ['selection'],
@@ -56,7 +68,7 @@ const SYSTEM_PROMPT = `Je leest screenshots of de platte tekst van een pagina me
 - Verzin niets: als een waarde niet zichtbaar is, geef je null. Gok geen bookmaker.
 - Staat dezelfde bet op meerdere screenshots (overlap), registreer hem dan één keer.
 - Paginatekst bevat ook menu's, promoties, wedstrijdaanbod en odds die niet gespeeld zijn: registreer alleen geplaatste bets (met een inzet), geen losse odds uit het aanbod of een lege betslip.
-- Bet builder / meerdere selecties op dezelfde wedstrijd met alleen een gezamenlijke odd: maak daar één leg van, met de selecties samengevoegd met " + " en " (bet builder)" erachter, en de gezamenlijke odd als odds van die leg.
+- Bet builder / meerdere selecties op dezelfde wedstrijd met alleen een gezamenlijke odd: maak daar één leg van met de gezamenlijke odd als odds, en zet de losse onderdelen (markt + keuze) in parts. Zet in selection dan alleen "Bet builder". Ook binnen een combi is een bet builder één leg.
 - Ontbreekt in een combi precies één leg-odd en is er geen boost, leid die dan af als totale odds gedeeld door het product van de andere legs (2 decimalen) en zet dat in note. Bij een boost (totaal hoger dan het product) of als meer odds ontbreken: laat ze null.
 - Krijg je een lijst met bekende bets, sla die dan over: registreer ze niet (ook niet als de status inmiddels veranderd is) en tel ze in skippedKnown. Een bet is bekend als het coupon-nummer overeenkomt, of anders inzet + totale odds + wedstrijden.
 - Vul payout altijd in zodra er een uitbetaal-/te-winnen-bedrag zichtbaar is, ook bij een bet die nog open staat.

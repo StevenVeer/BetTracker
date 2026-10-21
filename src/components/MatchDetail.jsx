@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import { betBuilderStatus, withPartStatus } from '../markets.js';
 import { FavoriteButton, IN_PLAY_STATUSES, PickLines, SettlePickRows, statusLabel } from './liveShared.jsx';
 import InlineIcon from './InlineIcon.jsx';
 
@@ -252,6 +253,7 @@ export default function MatchDetail({ listMatch, onBack, onToggleFavorite, onSet
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [settled, setSettled] = useState({}); // legId -> pick + status
+  const [partsDraft, setPartsDraft] = useState({}); // legId -> bet builder-onderdelen met uitslag
 
   useEffect(() => {
     let cancelled = false;
@@ -296,14 +298,33 @@ export default function MatchDetail({ listMatch, onBack, onToggleFavorite, onSet
   // alleen open legs) - hier vasthouden zodat je ziet wat je net hebt
   // aangeklikt. Terugdraaien kan via bewerken in de bets-lijst: de server
   // heropent een al afgehandelde combi niet vanzelf.
-  const settledPicks = Object.values(settled);
-  const openPicks = picks.filter((p) => !p.legId || !settled[p.legId]);
+  // Bet builder-onderdelen die je hier al hebt afgevinkt (legId -> parts),
+  // tot de volgende poll de nieuwe stand meebrengt.
+  const withParts = (p) => (partsDraft[p.legId] ? { ...p, parts: partsDraft[p.legId] } : p);
+  const settledPicks = Object.values(settled).map(withParts);
+  const openPicks = picks.filter((p) => !p.legId || !settled[p.legId]).map(withParts);
 
   async function settle(pick, status) {
     setSettled((s) => ({ ...s, [pick.legId]: { ...pick, status } }));
     try {
       await onSettleLeg(pick.legId, { status });
     } catch {
+      setSettled(({ [pick.legId]: _, ...rest }) => rest);
+    }
+  }
+
+  // Een onderdeel afvinken; is de leg daarmee beslist (een onderdeel
+  // verloren of alles binnen), dan schuift hij door naar de afgehandelde picks.
+  async function settlePart(pick, index, status) {
+    const partStatuses = withPartStatus(pick.parts, index, status);
+    const legStatus = betBuilderStatus(partStatuses);
+    const parts = pick.parts.map((part, i) => ({ ...part, status: partStatuses[i] }));
+    setPartsDraft((d) => ({ ...d, [pick.legId]: parts }));
+    if (legStatus !== 'open') setSettled((s) => ({ ...s, [pick.legId]: { ...pick, status: legStatus } }));
+    try {
+      await onSettleLeg(pick.legId, { partStatuses });
+    } catch {
+      setPartsDraft(({ [pick.legId]: _, ...rest }) => rest);
       setSettled(({ [pick.legId]: _, ...rest }) => rest);
     }
   }
@@ -342,7 +363,7 @@ export default function MatchDetail({ listMatch, onBack, onToggleFavorite, onSet
         <div className="md-card is-picks">
           <div className="md-card-title">Jouw picks op deze wedstrijd</div>
           {onSettleLeg ? (
-            <SettlePickRows openPicks={openPicks} settledPicks={settledPicks} match={match} onSettle={settle} />
+            <SettlePickRows openPicks={openPicks} settledPicks={settledPicks} match={match} onSettle={settle} onSettlePart={settlePart} />
           ) : (
             <PickLines picks={openPicks} match={match} />
           )}

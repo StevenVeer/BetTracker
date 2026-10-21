@@ -63,7 +63,34 @@ export function selectionOptions(market, match) {
   }
 }
 
+// Eén onderdeel van een bet builder. Een korte keuze ("Ja", "1+") zegt
+// zonder markt niets, dus die krijgt de markt ervoor.
+export function partLabel(part) {
+  return part.market && part.pick.length <= 3 ? `${part.market}: ${part.pick}` : part.pick;
+}
+
+export function isBetBuilder(bet) {
+  return Array.isArray(bet.parts) && bet.parts.length > 1;
+}
+
+export const partStatus = (part) => part.status || 'open';
+
+// Zelfde regel als betBuilderStatus op de server: één verloren onderdeel
+// maakt de leg verloren, void-onderdelen vallen weg.
+export function betBuilderStatus(statuses) {
+  if (statuses.includes('lost')) return 'lost';
+  if (statuses.includes('open')) return 'open';
+  if (statuses.every((s) => s === 'void')) return 'void';
+  return 'won';
+}
+
+// De statussen van alle onderdelen, met die van onderdeel `index` gewijzigd.
+export function withPartStatus(parts, index, status) {
+  return parts.map((part, i) => (i === index ? status : partStatus(part)));
+}
+
 export function describeBet(bet) {
+  if (isBetBuilder(bet)) return `Bet builder: ${bet.parts.map(partLabel).join(' + ')}`;
   const options = selectionOptions(bet.market, bet.match);
   if (bet.market === 'over_under') {
     const dir = bet.selection === 'over' ? 'Over' : 'Onder';

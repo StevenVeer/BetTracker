@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { describeBet, STATUS_LABELS } from '../markets.js';
+import { betBuilderStatus, describeBet, isBetBuilder, partStatus, STATUS_LABELS } from '../markets.js';
 import { api } from '../api.js';
 import { Amount } from './AmountsToggle.jsx';
 import { betOutcome } from '../dailyResults.js';
@@ -178,15 +178,30 @@ export function ScoreBadge({ leg, onLinked }) {
   return null;
 }
 
+const PART_MARKS = { won: '✓', lost: '✕', void: '⌀' };
+
 function LegRow({ leg, onLiveLinked }) {
   return (
     <div className="leg-row">
       <div className="leg-info">
         <span className="leg-match">{legLabel(leg)}</span>
         <span className="muted">
-          {describeBet(leg)}
+          {isBetBuilder(leg) ? `Bet builder · ${leg.parts.length} selecties` : describeBet(leg)}
           {legKickoff(leg) ? ` · ${formatKickoff(legKickoff(leg))}` : ''}
         </span>
+        {isBetBuilder(leg) && (
+          <ul className="leg-parts">
+            {leg.parts.map((part, i) => (
+              <li key={i} className={`leg-part-${partStatus(part)}`}>
+                <span>
+                  {part.pick}
+                  {partStatus(part) !== 'open' && <span className="leg-part-mark">{PART_MARKS[partStatus(part)]}</span>}
+                </span>
+                {part.market && <span className="muted">{part.market}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       <ScoreBadge leg={leg} onLinked={onLiveLinked} />
       <span className="leg-odds">@ {Number(leg.odds).toFixed(2)}</span>
@@ -252,6 +267,26 @@ const LEG_STATUS_OPTIONS = [
   { key: 'void', icon: '⌀', title: 'Void' },
 ];
 
+function StatusSeg({ value, onChange, label = 'Uitslag van deze selectie' }) {
+  return (
+    <span className="eb-seg" role="group" aria-label={label}>
+      {LEG_STATUS_OPTIONS.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          className={`eb-seg-btn eb-${o.key}${value === o.key ? ' on' : ''}`}
+          title={o.title}
+          aria-label={o.title}
+          aria-pressed={value === o.key}
+          onClick={() => onChange(o.key)}
+        >
+          {o.icon}
+        </button>
+      ))}
+    </span>
+  );
+}
+
 // Picks van dezelfde wedstrijd onder één kop (net als in OpenBetsModal);
 // handmatige selecties hebben geen match-rij en blijven per leg staan.
 function groupLegs(legs) {
@@ -277,7 +312,12 @@ const numChanged = (draft, original) => Math.abs(Number(draft) - Number(original
 function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
   const isCombi = bet.legs.length > 1;
   const [legDraft, setLegDraft] = useState(() =>
-    Object.fromEntries(bet.legs.map((l) => [l.id, { status: l.status, odds: Number(l.odds).toFixed(2) }]))
+    Object.fromEntries(
+      bet.legs.map((l) => [
+        l.id,
+        { status: l.status, odds: Number(l.odds).toFixed(2), parts: isBetBuilder(l) ? l.parts.map(partStatus) : null },
+      ])
+    )
   );
   const initialFields = {
     odds: Number(bet.odds).toFixed(2),
@@ -295,6 +335,11 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
 
   function setLeg(id, patch) {
     setLegDraft((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
+  }
+  // Bet builder: de leg-status volgt uit de onderdelen.
+  function setPart(id, index, status) {
+    const parts = legDraft[id].parts.map((s, i) => (i === index ? status : s));
+    setLeg(id, { parts, status: betBuilderStatus(parts) });
   }
   function setField(name, value) {
     setFields((prev) => {
@@ -315,6 +360,7 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
       leg,
       oddsChanged: !isCombi ? false : numChanged(d.odds, leg.odds),
       statusChanged: d.status !== leg.status,
+      partsChanged: Boolean(d.parts) && d.parts.some((s, i) => s !== partStatus(leg.parts[i])),
       // Bestaande leg-odds onder 1.01 (bv. 1.00 bij een import zonder odds)
       // mogen blijven staan; alleen een nieuw ingevoerde waarde wordt gecheckt.
       oddsInvalid: isCombi && numChanged(d.odds, leg.odds) && !(Number(d.odds) >= 1.01),
@@ -383,7 +429,7 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
   if (fields.placedAt && fields.placedAt !== initialFields.placedAt) betPatch.placedAt = new Date(fields.placedAt).toISOString();
   if (fields.settledAt && fields.settledAt !== initialFields.settledAt) betPatch.settledAt = new Date(fields.settledAt).toISOString();
 
-  const legChangeCount = legChanges.filter((c) => c.oddsChanged || c.statusChanged).length;
+  const legChangeCount = legChanges.filter((c) => c.oddsChanged || c.statusChanged || c.partsChanged).length;
   const changeCount = legChangeCount + Object.keys(betPatch).length;
   const invalid =
     legChanges.some((c) => c.oddsInvalid) || !(Number(fields.odds) >= 1.01) || !(Number(fields.stake) > 0);
@@ -394,7 +440,10 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
     setSaving(true);
     try {
       for (const c of legChanges) if (c.oddsChanged) await onUpdateLeg(c.leg.id, { odds: Number(legDraft[c.leg.id].odds) });
-      for (const c of legChanges) if (c.statusChanged) await onUpdateLeg(c.leg.id, { status: legDraft[c.leg.id].status });
+      for (const c of legChanges) {
+        if (c.partsChanged) await onUpdateLeg(c.leg.id, { partStatuses: legDraft[c.leg.id].parts });
+        else if (c.statusChanged) await onUpdateLeg(c.leg.id, { status: legDraft[c.leg.id].status });
+      }
       if (Object.keys(betPatch).length > 0) await onUpdate(bet.id, betPatch);
       onClose();
     } finally {
@@ -443,11 +492,12 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
                 </header>
                 {group.legs.map((leg) => {
                   const d = legDraft[leg.id];
-                  const changed = d.status !== leg.status || (isCombi && numChanged(d.odds, leg.odds));
+                  const changed = d.status !== leg.status || (isCombi && numChanged(d.odds, leg.odds)) || legChanges.find((c) => c.leg.id === leg.id)?.partsChanged;
                   return (
-                    <div className={`eb-pick${changed ? ' is-changed' : ''}`} key={leg.id}>
+                    <div className="eb-leg" key={leg.id}>
+                    <div className={`eb-pick${changed ? ' is-changed' : ''}`}>
                       <div className="ob-pick-info">
-                        <span className="ob-pick-name">{describeBet(leg)}</span>
+                        <span className="ob-pick-name">{d.parts ? `Bet builder · ${d.parts.length} selecties` : describeBet(leg)}</span>
                         {group.manual && <ScoreBadge leg={leg} onLinked={onLiveLinked} />}
                       </div>
                       {isCombi && (
@@ -458,22 +508,29 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
                           aria-label="Odds van deze selectie"
                         />
                       )}
-                      <span className="eb-seg" role="group" aria-label="Uitslag van deze selectie">
-                        {LEG_STATUS_OPTIONS.map((o) => (
-                          <button
-                            key={o.key}
-                            type="button"
-                            className={`eb-seg-btn eb-${o.key}${d.status === o.key ? ' on' : ''}`}
-                            title={o.title}
-                            aria-label={o.title}
-                            aria-pressed={d.status === o.key}
-                            onClick={() => setLeg(leg.id, { status: o.key })}
-                          >
-                            {o.icon}
-                          </button>
-                        ))}
-                      </span>
+                      {d.parts ? (
+                        // Afgeleid uit de onderdelen hieronder, dus niet los te kiezen.
+                        <span className={`leg-status leg-status-${d.status} eb-derived`} title="Volgt uit de onderdelen">
+                          {STATUS_LABELS[d.status]}
+                        </span>
+                      ) : (
+                        <StatusSeg value={d.status} onChange={(status) => setLeg(leg.id, { status })} />
+                      )}
                       <span className={`eb-dot${changed ? ' on' : ''}`} title="Niet opgeslagen" />
+                    </div>
+                    {d.parts && (
+                      <ul className="eb-parts">
+                        {leg.parts.map((part, k) => (
+                          <li className={`eb-part${d.parts[k] !== partStatus(part) ? ' is-changed' : ''}`} key={k}>
+                            <span className="ob-part-name">
+                              {part.pick}
+                              {part.market && <span className="muted">{part.market}</span>}
+                            </span>
+                            <StatusSeg value={d.parts[k]} onChange={(status) => setPart(leg.id, k, status)} label="Uitslag van dit onderdeel" />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     </div>
                   );
                 })}

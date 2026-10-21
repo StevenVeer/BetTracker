@@ -70,6 +70,10 @@ export function ensureSchema() {
       -- uitgelezen van een screenshot. Gebruikt om settled_at te schatten
       -- (zie estimateSettledAt in index.js).
       alter table bet_legs add column if not exists kickoff_at timestamptz;
+      -- Onderdelen van een bet builder ([{ market, pick }]): één leg met één
+      -- gezamenlijke odd, die alleen wint als alle onderdelen winnen. selection
+      -- blijft een samengevoegde tekst, zodat bestaande code gewoon werkt.
+      alter table bet_legs add column if not exists parts jsonb;
 
       create table if not exists bookmaker_withdrawals (
         id text primary key,

@@ -1,4 +1,4 @@
-import { describeBet, MARKET_ABBR } from '../markets.js';
+import { describeBet, isBetBuilder, MARKET_ABBR, partStatus, STATUS_LABELS as LEG_STATUS_LABELS } from '../markets.js';
 
 // Gedeeld tussen het live-overzicht (LiveScores.jsx) en de wedstrijd-
 // detailpagina (MatchDetail.jsx).
@@ -25,7 +25,7 @@ export function statusLabel(status) {
 }
 
 function pickLabel(pick, match) {
-  return describeBet({ market: pick.market, selection: pick.selection, line: pick.line, match });
+  return describeBet({ market: pick.market, selection: pick.selection, line: pick.line, parts: pick.parts, match });
 }
 
 export function StarIcon({ filled }) {
@@ -75,16 +75,49 @@ export function PickLines({ picks, match }) {
   );
 }
 
+// Onderdelen van een bet builder met per onderdeel hit/mis-knoppen; een al
+// afgehandeld onderdeel toont zijn uitslag.
+export function BuilderPartRows({ parts, onSettlePart }) {
+  return (
+    <ul className="ob-parts">
+      {parts.map((part, i) => {
+        const status = partStatus(part);
+        return (
+          <li className="ob-part" key={i}>
+            <span className="ob-part-name">
+              {part.pick}
+              {part.market && <span className="muted">{part.market}</span>}
+            </span>
+            {status === 'open' ? (
+              <span className="ob-actions">
+                <button type="button" className="ob-btn ob-won" title="Gewonnen" aria-label="Gewonnen" onClick={() => onSettlePart(i, 'won')}>
+                  ✓
+                </button>
+                <button type="button" className="ob-btn ob-lost" title="Verloren" aria-label="Verloren" onClick={() => onSettlePart(i, 'lost')}>
+                  ✕
+                </button>
+              </span>
+            ) : (
+              <span className={`leg-status leg-status-${status}`}>{LEG_STATUS_LABELS[status]}</span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 // Picks op de detailpagina met dezelfde hit/mis-knoppen als in de Open
-// bets-popup. Net afgehandelde picks blijven met hun uitslag staan.
-export function SettlePickRows({ openPicks, settledPicks, match, onSettle }) {
+// bets-popup. Net afgehandelde picks blijven met hun uitslag staan. Bij een
+// bet builder gaan de knoppen per onderdeel (onSettlePart).
+export function SettlePickRows({ openPicks, settledPicks, match, onSettle, onSettlePart }) {
   const row = (p, actions) => (
     <div className="ob-pick" key={p.legId || p.selection}>
       <div className="ob-pick-info">
         <span className="ob-pick-name">
           <span className="pick-line">
             <span className="market">{MARKET_ABBR[p.market] || p.market}</span>
-            {pickLabel(p, match)}
+            {isBetBuilder(p) ? `Bet builder · ${p.parts.length} selecties` : pickLabel(p, match)}
           </span>
         </span>
         {p.bookmaker && (
@@ -93,6 +126,7 @@ export function SettlePickRows({ openPicks, settledPicks, match, onSettle }) {
             {p.isCombi && <span className="ob-combi">combi</span>}
           </span>
         )}
+        {isBetBuilder(p) && p.legId && <BuilderPartRows parts={p.parts} onSettlePart={(i, status) => onSettlePart(p, i, status)} />}
       </div>
       {p.odds ? <span className="ob-odds">@ {Number(p.odds).toFixed(2)}</span> : null}
       {actions}
@@ -103,7 +137,7 @@ export function SettlePickRows({ openPicks, settledPicks, match, onSettle }) {
       {openPicks.map((p) =>
         row(
           p,
-          p.legId ? (
+          p.legId && !isBetBuilder(p) ? (
             <span className="ob-actions">
               <button type="button" className="ob-btn ob-won" title="Gewonnen" aria-label="Gewonnen" onClick={() => onSettle(p, 'won')}>
                 ✓
@@ -116,7 +150,7 @@ export function SettlePickRows({ openPicks, settledPicks, match, onSettle }) {
         )
       )}
       {settledPicks.map((p) =>
-        row(p, <span className={`leg-status leg-status-${p.status}`}>{p.status === 'won' ? 'Gewonnen' : 'Verloren'}</span>)
+        row(p, <span className={`leg-status leg-status-${p.status}`}>{LEG_STATUS_LABELS[p.status]}</span>)
       )}
     </div>
   );

@@ -228,6 +228,7 @@ function serializeLeg(row) {
     status: row.status,
     manualLabel: row.manual_label,
     kickoffAt: row.kickoff_at || null,
+    parts: row.parts || null,
     match: row.match_id
       ? {
           id: row.match_id,
@@ -242,6 +243,46 @@ function serializeLeg(row) {
         }
       : null,
   };
+}
+
+// Bet builder-onderdelen opschonen tot [{ market, pick }] als JSON-tekst, of
+// null als er minder dan twee bruikbare onderdelen zijn.
+function normalizeParts(parts) {
+  if (!Array.isArray(parts)) return null;
+  const clean = parts
+    .map((part) => ({ market: String(part?.market || '').trim() || null, pick: String(part?.pick || '').trim() }))
+    .filter((part) => part.pick);
+  return clean.length >= 2 ? JSON.stringify(clean) : null;
+}
+
+// Uitslag van een bet builder-leg uit die van zijn onderdelen: één verloren
+// onderdeel maakt de leg verloren, zolang er nog iets open staat blijft hij
+// open, en void-onderdelen vallen weg (alles void = void).
+function betBuilderStatus(statuses) {
+  if (statuses.includes('lost')) return 'lost';
+  if (statuses.includes('open')) return 'open';
+  if (statuses.every((s) => s === 'void')) return 'void';
+  return 'won';
+}
+
+// Legs van vóór de parts-kolom: de import plakte de onderdelen samen tot
+// "Markt: keuze + Markt: keuze (bet builder)". Bij het opstarten (idempotent:
+// alleen waar parts nog leeg is) terugsplitsen, zodat ze ook als lijst tonen.
+function splitBetBuilderSelection(selection) {
+  const body = String(selection || '').replace(/\s*\(bet builder\)\s*$/i, '');
+  return body.split(' + ').map((text) => {
+    const colon = text.lastIndexOf(': ');
+    return colon > 0 ? { market: text.slice(0, colon), pick: text.slice(colon + 2) } : { market: null, pick: text };
+  });
+}
+
+async function backfillBetBuilderParts() {
+  const { rows } = await pool.query(`select id, selection from bet_legs where parts is null and selection ilike '%(bet builder)'`);
+  for (const row of rows) {
+    const parts = normalizeParts(splitBetBuilderSelection(row.selection));
+    if (parts) await pool.query('update bet_legs set parts = $2 where id = $1', [row.id, parts]);
+  }
+  if (rows.length) console.log(`[bet builder] ${rows.length} leg(s) opgesplitst in onderdelen`);
 }
 
 function serializeBet(row, legRows) {
@@ -341,9 +382,9 @@ app.post('/api/bets', async (req, res) => {
       const matchId = await upsertMatch(leg.match);
       const kickoffAt = !matchId && leg.kickoffAt && !Number.isNaN(new Date(leg.kickoffAt).getTime()) ? new Date(leg.kickoffAt) : null;
       await pool.query(
-        `insert into bet_legs (id, bet_id, position, match_id, manual_label, market, selection, line, odds, status, kickoff_at)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open', $10)`,
-        [randomUUID(), id, position, matchId, matchId ? null : leg.manualLabel, leg.market, leg.selection, leg.line ?? null, leg.odds, kickoffAt]
+        `insert into bet_legs (id, bet_id, position, match_id, manual_label, market, selection, line, odds, status, kickoff_at, parts)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open', $10, $11)`,
+        [randomUUID(), id, position, matchId, matchId ? null : leg.manualLabel, leg.market, leg.selection, leg.line ?? null, leg.odds, kickoffAt, normalizeParts(leg.parts)]
       );
       position += 1;
     }
@@ -629,7 +670,7 @@ const LEG_STATUSES = ['open', 'won', 'lost', 'void'];
 // die ene leg; de totale odds van de bet pas je apart aan.
 app.patch('/api/bet-legs/:id', async (req, res) => {
   const { id } = req.params;
-  const { status, odds, kickoffAt } = req.body;
+  const { status, odds, kickoffAt, partStatuses } = req.body;
   const updates = {};
   if (status !== undefined) {
     if (!LEG_STATUSES.includes(status)) {
@@ -637,6 +678,23 @@ app.patch('/api/bet-legs/:id', async (req, res) => {
       return;
     }
     updates.status = status;
+  }
+  // Bet builder: elk onderdeel heeft een eigen uitslag; de leg-status volgt
+  // daaruit. Zonder partStatuses maar met een leg-status gewonnen/void/open
+  // gaan alle onderdelen mee (verloren zegt niet welk onderdeel het was).
+  if (partStatuses !== undefined || status !== undefined) {
+    const { rows: partRows } = await pool.query('select parts from bet_legs where id = $1', [id]);
+    const parts = partRows[0]?.parts;
+    if (partStatuses !== undefined) {
+      if (!Array.isArray(parts) || !Array.isArray(partStatuses) || partStatuses.length !== parts.length || !partStatuses.every((s) => LEG_STATUSES.includes(s))) {
+        res.status(400).json({ error: 'partStatuses moet per onderdeel van deze bet builder een geldige status hebben' });
+        return;
+      }
+      updates.parts = JSON.stringify(parts.map((part, i) => ({ ...part, status: partStatuses[i] })));
+      updates.status = betBuilderStatus(partStatuses);
+    } else if (Array.isArray(parts) && status !== 'lost') {
+      updates.parts = JSON.stringify(parts.map((part) => ({ ...part, status })));
+    }
   }
   if (odds !== undefined) {
     if (!odds || Number(odds) < 1.01) {
@@ -1846,7 +1904,7 @@ app.get('/api/scores/usage', async (req, res) => {
 async function getFavoriteState() {
   const [legRows, overrideRows] = await Promise.all([
     pool.query(`
-      select l.id as leg_id, l.market, l.selection, l.line, l.odds, b.bookmaker,
+      select l.id as leg_id, l.market, l.selection, l.line, l.parts, l.odds, b.bookmaker,
         (select count(*) from bet_legs x where x.bet_id = b.id) > 1 as is_combi,
         m.id as match_id, m.home, m.away, m.competition, m.commence_time, m.tsdb_live_id
       from matches m
@@ -1880,6 +1938,7 @@ async function getFavoriteState() {
       legId: row.leg_id,
       market: row.market,
       selection: row.selection,
+      parts: row.parts,
       line: row.line !== null ? Number(row.line) : null,
       odds: Number(row.odds),
       bookmaker: row.bookmaker,
@@ -2044,7 +2103,7 @@ function splitManualLabel(label) {
 app.get('/api/live-link-suggestions', async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      select l.id as leg_id, l.match_id, l.manual_label, l.kickoff_at, l.market, l.selection, l.line,
+      select l.id as leg_id, l.match_id, l.manual_label, l.kickoff_at, l.market, l.selection, l.line, l.parts,
         b.source, m.home, m.away, m.competition, m.commence_time, m.tsdb_live_id
       from bet_legs l
       join bets b on b.id = l.bet_id
@@ -2082,7 +2141,7 @@ app.get('/api/live-link-suggestions', async (req, res) => {
       }
       const item = items.get(key);
       item.legIds.push(row.leg_id);
-      item.picks.push({ market: row.market, selection: row.selection, line: row.line !== null ? Number(row.line) : null });
+      item.picks.push({ market: row.market, selection: row.selection, line: row.line !== null ? Number(row.line) : null, parts: row.parts });
     }
     res.json({ items: [...items.values()] });
   } catch (error) {
@@ -2166,7 +2225,8 @@ app.patch('/api/bet-legs/:id/live-link', async (req, res) => {
 
 const PORT = process.env.PORT || 3001;
 ensureSchema()
-  .then(() => {
+  .then(async () => {
+    await backfillBetBuilderParts().catch((error) => console.error('[bet builder] backfill mislukt:', error.message));
     app.listen(PORT, () => {
       console.log(`Bet Tracker API listening on port ${PORT}`);
     });

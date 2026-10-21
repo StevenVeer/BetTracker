@@ -313,8 +313,64 @@ body {
   gap: 12px;
   padding: 10px 14px;
 }
-.eb-pick + .eb-pick {
+.eb-leg + .eb-leg {
   border-top: 1px dashed rgba(244, 242, 232, 0.1);
+}
+/* Bet builder in het bewerkscherm: per onderdeel een eigen uitslag; de
+   leg-status erboven is daaruit afgeleid. */
+.eb-derived {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+.eb-parts {
+  list-style: none;
+  margin: 0 14px 10px 28px;
+  padding: 0 0 0 10px;
+  border-left: 2px solid rgba(244, 242, 232, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.eb-part {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.eb-part.is-changed {
+  background: rgba(232, 178, 61, 0.07);
+}
+/* Bet builder-onderdelen in de Open bets-popup en op de live-detailpagina. */
+.ob-parts {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0 0 0 10px;
+  border-left: 2px solid rgba(244, 242, 232, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ob-part {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ob-part .ob-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 13px;
+}
+.ob-part-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 13.5px;
+  line-height: 1.3;
+}
+.ob-part-name .muted {
+  font-size: 12px;
 }
 .eb-pick.is-changed {
   background: rgba(232, 178, 61, 0.07);
@@ -720,7 +776,8 @@ body {
 .field input,
 .field select,
 .field textarea,
-.import-leg input {
+.import-leg input,
+.import-leg-part input {
   font-family: 'Space Mono', ui-monospace, SFMono-Regular, monospace;
   font-size: 13px;
   padding: 10px 11px;
@@ -746,7 +803,8 @@ body {
 .field input:focus,
 .field select:focus,
 .field textarea:focus,
-.import-leg input:focus {
+.import-leg input:focus,
+.import-leg-part input:focus {
   outline: none;
   border-color: var(--gold);
 }
@@ -1736,6 +1794,41 @@ body {
 .leg-match {
   color: var(--chalk);
   font-weight: 500;
+}
+/* Onderdelen van een bet builder: keuze met de markt eronder, als
+   ingesprongen lijst onder de leg (de odd staat op de leg zelf). */
+.leg-parts {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 2px 0 2px 10px;
+  border-left: 2px solid rgba(244, 242, 232, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.leg-parts li {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+.leg-parts li > span:first-child {
+  color: var(--chalk);
+}
+.leg-parts .muted {
+  font-size: 12px;
+}
+.leg-part-mark {
+  margin-left: 6px;
+  font-size: 12px;
+}
+.leg-part-won .leg-part-mark {
+  color: var(--win-text);
+}
+.leg-part-lost .leg-part-mark {
+  color: var(--loss);
+}
+.leg-part-void .leg-part-mark {
+  color: rgba(244, 242, 232, 0.55);
 }
 .leg-odds {
   flex-shrink: 0;
@@ -3259,7 +3352,7 @@ body {
 }
 .import-leg {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.4fr 80px 190px;
+  grid-template-columns: 1fr 1fr 2.6fr 80px 38px;
   gap: 8px;
   margin-top: 6px;
 }
@@ -3268,8 +3361,47 @@ body {
   width: 100%;
   box-sizing: border-box;
 }
-.import-leg input::placeholder {
+.import-leg input::placeholder,
+.import-leg-part input::placeholder {
   color: rgba(244, 242, 232, 0.35);
+}
+.import-leg-builder {
+  align-self: center;
+  font-size: 13px;
+  color: var(--gold);
+}
+/* Onderdelen van een bet builder: ingesprongen onder hun leg. */
+.import-leg-parts {
+  margin: 6px 0 0 18px;
+  padding-left: 10px;
+  border-left: 2px solid rgba(244, 242, 232, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.import-leg-part {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr auto;
+  gap: 8px;
+}
+.import-leg-part input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+.import-part-delete {
+  width: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(244, 242, 232, 0.15);
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(244, 242, 232, 0.55);
+  cursor: pointer;
+}
+.import-part-delete:hover {
+  color: var(--loss-text);
+  border-color: rgba(225, 75, 75, 0.45);
 }
 .import-actions {
   display: flex;

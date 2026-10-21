@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import DecimalInput from './DecimalInput.jsx';
+import InlineIcon from './InlineIcon.jsx';
 
 const MAX_DIMENSION = 1600;
 const STATUS_OPTIONS = [
@@ -128,8 +129,21 @@ function toDraft(bet, bookmakers) {
       selection: leg.selection || '',
       odds: leg.odds != null ? String(leg.odds) : '',
       kickoffAt: toLocalInput(leg.kickoffAt),
+      parts: (leg.parts || []).map((part) => ({ market: part.market || '', pick: part.pick || '' })),
     })),
   };
+}
+
+const isBetBuilder = (leg) => leg.parts.length > 1;
+
+// selection blijft bij een bet builder een samengevoegde tekst: rapporten,
+// duplicaatherkenning en link-suggesties lezen alleen dat veld.
+const partText = (part) => [part.market.trim(), part.pick.trim()].filter(Boolean).join(': ');
+
+function legSelection(leg) {
+  const parts = leg.parts.filter((part) => part.pick.trim());
+  if (parts.length < 2) return leg.selection.trim() || (parts[0] ? partText(parts[0]) : '');
+  return `${parts.map(partText).join(' + ')} (bet builder)`;
 }
 
 function draftProblem(draft) {
@@ -137,7 +151,7 @@ function draftProblem(draft) {
   if (!(Number(draft.stake) > 0)) return 'vul een inzet in';
   if (draft.legs.length === 0) return 'geen selecties';
   for (const leg of draft.legs) {
-    if (!leg.selection.trim()) return 'selectie ontbreekt';
+    if (isBetBuilder(leg) ? leg.parts.some((part) => !part.pick.trim()) : !legSelection(leg)) return 'selectie ontbreekt';
     if (!leg.home.trim() && !leg.away.trim()) return 'wedstrijd ontbreekt';
     if (!(Number(leg.odds) >= 1.01)) return 'odds ontbreken';
   }
@@ -256,6 +270,28 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
     );
   }
 
+  function updatePart(index, legIndex, partIndex, patch) {
+    setDrafts((prev) =>
+      prev.map((d, i) =>
+        i === index
+          ? { ...d, legs: d.legs.map((l, j) => (j === legIndex ? { ...l, parts: l.parts.map((p, k) => (k === partIndex ? { ...p, ...patch } : p)) } : l)) }
+          : d
+      )
+    );
+  }
+
+  function removeLeg(index, legIndex) {
+    setDrafts((prev) => prev.map((d, i) => (i === index ? { ...d, legs: d.legs.filter((_, j) => j !== legIndex) } : d)));
+  }
+
+  // Valt een bet builder terug naar één onderdeel, dan wordt het weer een
+  // gewone leg met dat onderdeel als selectie.
+  function removePart(index, legIndex, partIndex) {
+    const leg = drafts[index].legs[legIndex];
+    const parts = leg.parts.filter((_, k) => k !== partIndex);
+    updateLeg(index, legIndex, parts.length > 1 ? { parts } : { parts: [], selection: legSelection({ ...leg, selection: '', parts }) });
+  }
+
   const selected = drafts ? drafts.filter((d) => d.include) : [];
   const invalidCount = selected.filter(draftProblem).length;
 
@@ -281,7 +317,8 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
             match: null,
             manualLabel: [leg.home.trim(), leg.away.trim()].filter(Boolean).join(' - '),
             market: 'anders',
-            selection: leg.selection.trim(),
+            selection: legSelection(leg),
+            parts: isBetBuilder(leg) ? leg.parts.map((part) => ({ market: part.market.trim() || null, pick: part.pick.trim() })) : undefined,
             odds: Number(leg.odds),
             // Aftrap bepaalt de geschatte afhandeltijd (einde laatste wedstrijd).
             kickoffAt: leg.kickoffAt ? new Date(leg.kickoffAt).toISOString() : undefined,
@@ -472,22 +509,40 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
                       </label>
                     </div>
                     {draft.legs.map((leg, j) => (
-                      <div className="import-leg" key={j}>
+                      <div key={j}>
+                      <div className="import-leg">
                         <input placeholder="Thuis" value={leg.home} onChange={(e) => updateLeg(i, j, { home: e.target.value })} />
                         <input placeholder="Uit" value={leg.away} onChange={(e) => updateLeg(i, j, { away: e.target.value })} />
-                        <input placeholder="Selectie" value={leg.selection} onChange={(e) => updateLeg(i, j, { selection: e.target.value })} />
+                        {isBetBuilder(leg) ? (
+                          <span className="import-leg-builder">Bet builder · {leg.parts.length} selecties</span>
+                        ) : (
+                          <input placeholder="Selectie" value={leg.selection} onChange={(e) => updateLeg(i, j, { selection: e.target.value })} />
+                        )}
                         <DecimalInput
                           className="import-leg-odds"
                           placeholder="Odds"
                           value={leg.odds}
                           onChange={(e) => updateLeg(i, j, { odds: e.target.value })}
                         />
-                        <input
-                          type="datetime-local"
-                          title="Aftrap"
-                          value={leg.kickoffAt}
-                          onChange={(e) => updateLeg(i, j, { kickoffAt: e.target.value })}
-                        />
+                        {/* Geen aftrap-veld: een uitgelezen aftrap gaat ongezien mee, en
+                            anders komt hij via "Koppel games". */}
+                        <button type="button" className="import-part-delete" aria-label="Selectie verwijderen" title="Selectie verwijderen" onClick={() => removeLeg(i, j)}>
+                          <InlineIcon name="trash" size={16} />
+                        </button>
+                      </div>
+                      {isBetBuilder(leg) && (
+                        <div className="import-leg-parts">
+                          {leg.parts.map((part, k) => (
+                            <div className="import-leg-part" key={k}>
+                              <input placeholder="Markt" value={part.market} onChange={(e) => updatePart(i, j, k, { market: e.target.value })} />
+                              <input placeholder="Keuze" value={part.pick} onChange={(e) => updatePart(i, j, k, { pick: e.target.value })} />
+                              <button type="button" className="import-part-delete" aria-label="Onderdeel verwijderen" title="Onderdeel verwijderen" onClick={() => removePart(i, j, k)}>
+                                <InlineIcon name="trash" size={16} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       </div>
                     ))}
                   </div>
