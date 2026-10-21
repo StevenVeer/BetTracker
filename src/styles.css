@@ -3351,7 +3351,7 @@ body {
 }
 .import-leg {
   display: grid;
-  grid-template-columns: 1fr 1fr 2.6fr 80px 38px;
+  grid-template-columns: 1fr 1fr 2.6fr 80px auto 38px;
   gap: 8px;
   margin-top: 6px;
 }
@@ -3933,4 +3933,47 @@ body {
 }
 .md-settle-picks .pick-line {
   font-size: 13.5px;
+}
+
+/* Vroege uitbetaling (early payout) - turquoise, los van de status-kleuren
+   (goud/groen/rood) en het ING-blauw. */
+.ep-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border: 1px solid #2fb8a8;
+  border-radius: 999px;
+  background: rgba(47, 184, 168, 0.15);
+  color: #7fe0d3;
+  font-family: 'Oswald', sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+.ep-badge .inline-icon {
+  stroke-width: 2.4;
+}
+.ep-toggle {
+  cursor: pointer;
+  margin-left: 0;
+  flex: none;
+  align-self: center;
+}
+.ep-toggle:not(.is-on) {
+  border-color: rgba(244, 242, 232, 0.22);
+  background: transparent;
+  color: rgba(244, 242, 232, 0.4);
+}
+.ep-toggle:not(.is-on):hover {
+  border-color: #2fb8a8;
+  color: #7fe0d3;
+}
+.ob-pick-name .ep-toggle {
+  margin-left: 6px;
+  vertical-align: 1px;
 }

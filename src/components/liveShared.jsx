@@ -1,4 +1,5 @@
 import { describeBet, isBetBuilder, MARKET_ABBR, partStatus, STATUS_LABELS as LEG_STATUS_LABELS } from '../markets.js';
+import EarlyPayoutBadge from './EarlyPayoutBadge.jsx';
 
 // Gedeeld tussen het live-overzicht (LiveScores.jsx) en de wedstrijd-
 // detailpagina (MatchDetail.jsx).
@@ -69,6 +70,7 @@ export function PickLines({ picks, match }) {
         <div className="pick-line" key={i}>
           <span className="market">{MARKET_ABBR[p.market] || p.market}</span>
           {pickLabel(p, match)}
+          <EarlyPayoutBadge leg={p} />
         </div>
       ))}
     </div>
@@ -118,6 +120,7 @@ export function SettlePickRows({ openPicks, settledPicks, match, onSettle, onSet
           <span className="pick-line">
             <span className="market">{MARKET_ABBR[p.market] || p.market}</span>
             {isBetBuilder(p) ? `Bet builder · ${p.parts.length} selecties` : pickLabel(p, match)}
+            <EarlyPayoutBadge leg={p} />
           </span>
         </span>
         {p.bookmaker && (

@@ -5,6 +5,7 @@ import { Amount } from './AmountsToggle.jsx';
 import { betOutcome } from '../dailyResults.js';
 import DecimalInput from './DecimalInput.jsx';
 import InlineIcon from './InlineIcon.jsx';
+import EarlyPayoutBadge, { EarlyPayoutToggle } from './EarlyPayoutBadge.jsx';
 
 export function formatKickoff(iso) {
   if (!iso) return '—';
@@ -187,6 +188,7 @@ function LegRow({ leg, onLiveLinked }) {
         <span className="leg-match">{legLabel(leg)}</span>
         <span className="muted">
           {isBetBuilder(leg) ? `Bet builder · ${leg.parts.length} selecties` : describeBet(leg)}
+          <EarlyPayoutBadge leg={leg} />
           {legKickoff(leg) ? ` · ${formatKickoff(legKickoff(leg))}` : ''}
         </span>
         {isBetBuilder(leg) && (
@@ -315,7 +317,7 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
     Object.fromEntries(
       bet.legs.map((l) => [
         l.id,
-        { status: l.status, odds: Number(l.odds).toFixed(2), parts: isBetBuilder(l) ? l.parts.map(partStatus) : null },
+        { status: l.status, odds: Number(l.odds).toFixed(2), parts: isBetBuilder(l) ? l.parts.map(partStatus) : null, earlyPayout: Boolean(l.earlyPayout) },
       ])
     )
   );
@@ -361,6 +363,7 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
       oddsChanged: !isCombi ? false : numChanged(d.odds, leg.odds),
       statusChanged: d.status !== leg.status,
       partsChanged: Boolean(d.parts) && d.parts.some((s, i) => s !== partStatus(leg.parts[i])),
+      earlyPayoutChanged: d.earlyPayout !== Boolean(leg.earlyPayout),
       // Bestaande leg-odds onder 1.01 (bv. 1.00 bij een import zonder odds)
       // mogen blijven staan; alleen een nieuw ingevoerde waarde wordt gecheckt.
       oddsInvalid: isCombi && numChanged(d.odds, leg.odds) && !(Number(d.odds) >= 1.01),
@@ -429,7 +432,7 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
   if (fields.placedAt && fields.placedAt !== initialFields.placedAt) betPatch.placedAt = new Date(fields.placedAt).toISOString();
   if (fields.settledAt && fields.settledAt !== initialFields.settledAt) betPatch.settledAt = new Date(fields.settledAt).toISOString();
 
-  const legChangeCount = legChanges.filter((c) => c.oddsChanged || c.statusChanged || c.partsChanged).length;
+  const legChangeCount = legChanges.filter((c) => c.oddsChanged || c.statusChanged || c.partsChanged || c.earlyPayoutChanged).length;
   const changeCount = legChangeCount + Object.keys(betPatch).length;
   const invalid =
     legChanges.some((c) => c.oddsInvalid) || !(Number(fields.odds) >= 1.01) || !(Number(fields.stake) > 0);
@@ -440,6 +443,7 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
     setSaving(true);
     try {
       for (const c of legChanges) if (c.oddsChanged) await onUpdateLeg(c.leg.id, { odds: Number(legDraft[c.leg.id].odds) });
+      for (const c of legChanges) if (c.earlyPayoutChanged) await onUpdateLeg(c.leg.id, { earlyPayout: legDraft[c.leg.id].earlyPayout });
       for (const c of legChanges) {
         if (c.partsChanged) await onUpdateLeg(c.leg.id, { partStatuses: legDraft[c.leg.id].parts });
         else if (c.statusChanged) await onUpdateLeg(c.leg.id, { status: legDraft[c.leg.id].status });
@@ -492,12 +496,15 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
                 </header>
                 {group.legs.map((leg) => {
                   const d = legDraft[leg.id];
-                  const changed = d.status !== leg.status || (isCombi && numChanged(d.odds, leg.odds)) || legChanges.find((c) => c.leg.id === leg.id)?.partsChanged;
+                  const changed = d.status !== leg.status || (isCombi && numChanged(d.odds, leg.odds)) || legChanges.find((c) => c.leg.id === leg.id)?.partsChanged || d.earlyPayout !== Boolean(leg.earlyPayout);
                   return (
                     <div className="eb-leg" key={leg.id}>
                     <div className={`eb-pick${changed ? ' is-changed' : ''}`}>
                       <div className="ob-pick-info">
-                        <span className="ob-pick-name">{d.parts ? `Bet builder · ${d.parts.length} selecties` : describeBet(leg)}</span>
+                        <span className="ob-pick-name">
+                          {d.parts ? `Bet builder · ${d.parts.length} selecties` : describeBet(leg)}
+                          <EarlyPayoutToggle value={d.earlyPayout} onChange={(on) => setLeg(leg.id, { earlyPayout: on })} />
+                        </span>
                         {group.manual && <ScoreBadge leg={leg} onLinked={onLiveLinked} />}
                       </div>
                       {isCombi && (
@@ -756,7 +763,10 @@ export default function BetList({ bets, onUpdate, onUpdateLeg, onDelete, onLiveL
                     </span>
                   </div>
                   <div className="bet-selection">
-                    <span>{describeBet(bet.legs[0])}</span>
+                    <span>
+                      {describeBet(bet.legs[0])}
+                      <EarlyPayoutBadge leg={bet.legs[0]} />
+                    </span>
                     <span className="muted">{bet.bookmaker}</span>
                   </div>
                   <div className="bet-numbers">

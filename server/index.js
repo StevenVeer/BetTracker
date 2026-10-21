@@ -8,6 +8,7 @@ import { getLiveScores, startLiveScoresPoller, findLiveMatchFor, findLiveMatchId
 import { getMatchDetail } from './matchDetail.js';
 import { LEAGUES } from './leagues.js';
 import { extractBetsFromImages, extractBetsFromText } from './screenshotImport.js';
+import { applyEarlyPayout } from './earlyPayout.js';
 
 // Personal, single-user tool — not meant to be exposed publicly.
 // There is intentionally no login/auth on any of these routes.
@@ -163,6 +164,7 @@ function serializeLeg(row) {
     manualLabel: row.manual_label,
     kickoffAt: row.kickoff_at || null,
     parts: row.parts || null,
+    earlyPayout: Boolean(row.early_payout),
     match: row.match_id
       ? {
           id: row.match_id,
@@ -217,6 +219,32 @@ async function backfillBetBuilderParts() {
     if (parts) await pool.query('update bet_legs set parts = $2 where id = $1', [row.id, parts]);
   }
   if (rows.length) console.log(`[bet builder] ${rows.length} leg(s) opgesplitst in onderdelen`);
+}
+
+// Legs van vóór de early_payout-kolom: "Vroege uitbetaling" stond in de tekst.
+// Bij het opstarten (idempotent: daarna matcht de tekst niet meer) de vlag
+// zetten en de tekst opschonen - ook in de bet builder-onderdelen.
+const EARLY_PAYOUT_SQL = String.raw`(vroege|vroegtijdige)\s+uit-?betaling|early\s+pay-?out`;
+async function backfillEarlyPayout() {
+  let count = 0;
+  for (const table of ['bet_legs', 'planned_bet_legs']) {
+    const hasParts = table === 'bet_legs';
+    const { rows } = await pool.query(
+      `select id, selection${hasParts ? ', parts' : ''} from ${table}
+       where selection ~* $1${hasParts ? ' or parts::text ~* $1' : ''}`,
+      [EARLY_PAYOUT_SQL]
+    );
+    for (const row of rows) {
+      const leg = applyEarlyPayout({ selection: row.selection, parts: row.parts || null });
+      if (hasParts) {
+        await pool.query(`update ${table} set selection = $2, parts = $3, early_payout = true where id = $1`, [row.id, leg.selection, leg.parts ? JSON.stringify(leg.parts) : null]);
+      } else {
+        await pool.query(`update ${table} set selection = $2, early_payout = true where id = $1`, [row.id, leg.selection]);
+      }
+    }
+    count += rows.length;
+  }
+  if (count) console.log(`[vroege uitbetaling] ${count} leg(s) gemarkeerd en opgeschoond`);
 }
 
 function serializeBet(row, legRows) {
@@ -312,13 +340,14 @@ app.post('/api/bets', async (req, res) => {
     );
 
     let position = 0;
-    for (const leg of legs) {
+    for (const rawLeg of legs) {
+      const leg = applyEarlyPayout(rawLeg);
       const matchId = await upsertMatch(leg.match);
       const kickoffAt = !matchId && leg.kickoffAt && !Number.isNaN(new Date(leg.kickoffAt).getTime()) ? new Date(leg.kickoffAt) : null;
       await pool.query(
-        `insert into bet_legs (id, bet_id, position, match_id, manual_label, market, selection, line, odds, status, kickoff_at, parts)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open', $10, $11)`,
-        [randomUUID(), id, position, matchId, matchId ? null : leg.manualLabel, leg.market, leg.selection, leg.line ?? null, leg.odds, kickoffAt, normalizeParts(leg.parts)]
+        `insert into bet_legs (id, bet_id, position, match_id, manual_label, market, selection, line, odds, status, kickoff_at, parts, early_payout)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open', $10, $11, $12)`,
+        [randomUUID(), id, position, matchId, matchId ? null : leg.manualLabel, leg.market, leg.selection, leg.line ?? null, leg.odds, kickoffAt, normalizeParts(leg.parts), leg.earlyPayout]
       );
       position += 1;
     }
@@ -604,8 +633,9 @@ const LEG_STATUSES = ['open', 'won', 'lost', 'void'];
 // die ene leg; de totale odds van de bet pas je apart aan.
 app.patch('/api/bet-legs/:id', async (req, res) => {
   const { id } = req.params;
-  const { status, odds, kickoffAt, partStatuses } = req.body;
+  const { status, odds, kickoffAt, partStatuses, earlyPayout } = req.body;
   const updates = {};
+  if (earlyPayout !== undefined) updates.early_payout = Boolean(earlyPayout);
   if (status !== undefined) {
     if (!LEG_STATUSES.includes(status)) {
       res.status(400).json({ error: `status moet een van ${LEG_STATUSES.join(', ')} zijn` });
@@ -698,6 +728,7 @@ function serializePlannedLeg(row) {
     line: row.line !== null ? Number(row.line) : null,
     odds: row.odds !== null ? Number(row.odds) : null,
     manualLabel: row.manual_label,
+    earlyPayout: Boolean(row.early_payout),
     match: row.match_id
       ? {
           id: row.match_id,
@@ -783,12 +814,13 @@ app.post('/api/planned-bets', async (req, res) => {
     );
 
     let position = 0;
-    for (const leg of legs) {
+    for (const rawLeg of legs) {
+      const leg = applyEarlyPayout(rawLeg);
       const matchId = await upsertMatch(leg.match);
       await pool.query(
-        `insert into planned_bet_legs (id, planned_bet_id, position, match_id, manual_label, market, selection, line, odds)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [randomUUID(), id, position, matchId, matchId ? null : leg.manualLabel, leg.market, leg.selection, leg.line ?? null, leg.odds ?? null]
+        `insert into planned_bet_legs (id, planned_bet_id, position, match_id, manual_label, market, selection, line, odds, early_payout)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [randomUUID(), id, position, matchId, matchId ? null : leg.manualLabel, leg.market, leg.selection, leg.line ?? null, leg.odds ?? null, leg.earlyPayout]
       );
       position += 1;
     }
@@ -1569,7 +1601,7 @@ app.get('/api/scores/usage', async (req, res) => {
 async function getFavoriteState() {
   const [legRows, overrideRows] = await Promise.all([
     pool.query(`
-      select l.id as leg_id, l.market, l.selection, l.line, l.parts, l.odds, b.bookmaker,
+      select l.id as leg_id, l.market, l.selection, l.line, l.parts, l.odds, l.early_payout, b.bookmaker,
         (select count(*) from bet_legs x where x.bet_id = b.id) > 1 as is_combi,
         m.id as match_id, m.home, m.away, m.competition, m.commence_time, m.tsdb_live_id
       from matches m
@@ -1604,6 +1636,7 @@ async function getFavoriteState() {
       market: row.market,
       selection: row.selection,
       parts: row.parts,
+      earlyPayout: row.early_payout,
       line: row.line !== null ? Number(row.line) : null,
       odds: Number(row.odds),
       bookmaker: row.bookmaker,
@@ -1892,6 +1925,7 @@ const PORT = process.env.PORT || 3001;
 ensureSchema()
   .then(async () => {
     await backfillBetBuilderParts().catch((error) => console.error('[bet builder] backfill mislukt:', error.message));
+    await backfillEarlyPayout().catch((error) => console.error('[vroege uitbetaling] backfill mislukt:', error.message));
     app.listen(PORT, () => {
       console.log(`Bet Tracker API listening on port ${PORT}`);
     });

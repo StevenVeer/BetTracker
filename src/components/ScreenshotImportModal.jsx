@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import DecimalInput from './DecimalInput.jsx';
 import InlineIcon from './InlineIcon.jsx';
+import { EarlyPayoutToggle } from './EarlyPayoutBadge.jsx';
 
 const MAX_DIMENSION = 1600;
 const STATUS_OPTIONS = [
@@ -130,6 +131,7 @@ function toDraft(bet, bookmakers) {
       odds: leg.odds != null ? String(leg.odds) : '',
       kickoffAt: toLocalInput(leg.kickoffAt),
       parts: (leg.parts || []).map((part) => ({ market: part.market || '', pick: part.pick || '' })),
+      earlyPayout: Boolean(leg.earlyPayout),
     })),
   };
 }
@@ -322,6 +324,7 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
             odds: Number(leg.odds),
             // Aftrap bepaalt de geschatte afhandeltijd (einde laatste wedstrijd).
             kickoffAt: leg.kickoffAt ? new Date(leg.kickoffAt).toISOString() : undefined,
+            earlyPayout: leg.earlyPayout,
           })),
         });
         let final = bet;
@@ -524,6 +527,7 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
                           value={leg.odds}
                           onChange={(e) => updateLeg(i, j, { odds: e.target.value })}
                         />
+                        <EarlyPayoutToggle value={leg.earlyPayout} onChange={(on) => updateLeg(i, j, { earlyPayout: on })} />
                         {/* Geen aftrap-veld: een uitgelezen aftrap gaat ongezien mee, en
                             anders komt hij via "Koppel games". */}
                         <button type="button" className="import-part-delete" aria-label="Selectie verwijderen" title="Selectie verwijderen" onClick={() => removeLeg(i, j)}>

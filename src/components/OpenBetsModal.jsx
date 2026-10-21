@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { describeBet, isBetBuilder, withPartStatus } from '../markets.js';
 import { formatKickoff, legKickoff, legLabel, ScoreBadge } from './BetList.jsx';
 import { BuilderPartRows } from './liveShared.jsx';
+import EarlyPayoutBadge from './EarlyPayoutBadge.jsx';
 
 // Picks van dezelfde wedstrijd onder één kop, op aftrap gesorteerd. De
 // live-koppelstatus hangt aan de match (één keer in de kop); handmatig
@@ -66,7 +67,7 @@ export default function OpenBetsModal({
                   {group.picks.map((pick) => (
                     <div className="ob-pick" key={pick.id}>
                       <div className="ob-pick-info">
-                        <span className="ob-pick-name">{isBetBuilder(pick) ? `Bet builder · ${pick.parts.length} selecties` : describeBet(pick)}</span>
+                        <span className="ob-pick-name">{isBetBuilder(pick) ? `Bet builder · ${pick.parts.length} selecties` : describeBet(pick)}<EarlyPayoutBadge leg={pick} /></span>
                         <span className="ob-pick-meta">
                           <span className="ob-bk">{pick.bookmaker}</span>
                           {pick.isCombi && <span className="ob-combi">combi</span>}

@@ -6,6 +6,7 @@ const PATHS = {
   'arrow-left': 'M19 12H5M11 6l-6 6 6 6',
   'sort-time': 'M4 6h10M4 12h7M4 18h4M18 5v14M15 16l3 3 3-3',
   'sort-default': 'M4 6h16M4 12h16M4 18h16',
+  bolt: 'M13 3v7h6l-8 11v-7H5l8-11',
   trash: 'M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3',
 };
 

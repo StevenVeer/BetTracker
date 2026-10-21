@@ -72,6 +72,8 @@ export function ensureSchema() {
       -- gezamenlijke odd, die alleen wint als alle onderdelen winnen. selection
       -- blijft een samengevoegde tekst, zodat bestaande code gewoon werkt.
       alter table bet_legs add column if not exists parts jsonb;
+      -- Vroege uitbetaling (zie earlyPayout.js): vlag i.p.v. tekst in selection.
+      alter table bet_legs add column if not exists early_payout boolean not null default false;
 
       create table if not exists bookmaker_withdrawals (
         id text primary key,
@@ -184,6 +186,7 @@ export function ensureSchema() {
         line numeric,
         odds numeric
       );
+      alter table planned_bet_legs add column if not exists early_payout boolean not null default false;
 
       create index if not exists planned_bets_for_date_idx on planned_bets (for_date);
       create index if not exists planned_bet_legs_planned_bet_id_idx on planned_bet_legs (planned_bet_id);

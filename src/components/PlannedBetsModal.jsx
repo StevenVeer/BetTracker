@@ -4,6 +4,7 @@ import { describeBet } from '../markets.js';
 import { formatKickoff, legLabel } from './BetList.jsx';
 import PlannedBetForm from './PlannedBetForm.jsx';
 import DecimalInput from './DecimalInput.jsx';
+import EarlyPayoutBadge from './EarlyPayoutBadge.jsx';
 
 const WEEKDAY_DATE_FORMAT = new Intl.DateTimeFormat('nl-NL', { weekday: 'long', day: 'numeric', month: 'short' });
 const CHIP_DATE_FORMAT = new Intl.DateTimeFormat('nl-NL', { day: 'numeric', month: 'short' });
@@ -97,6 +98,7 @@ function PlannedBetRow({ planned, bookmakers, onPlaced, onRemoved, onError }) {
           selection: leg.selection,
           line: leg.line,
           odds: Number(legOdds[index]),
+          earlyPayout: leg.earlyPayout,
         })),
       });
       await api.deletePlannedBet(planned.id);
@@ -116,6 +118,7 @@ function PlannedBetRow({ planned, bookmakers, onPlaced, onRemoved, onError }) {
           <span className="leg-match">{isCombi ? `Combi (${planned.legs.length} selecties)` : legLabel(planned.legs[0])}</span>
           <span className="muted">
             {!isCombi && `${describeBet(planned.legs[0])}`}
+            {!isCombi && <EarlyPayoutBadge leg={planned.legs[0]} />}
             {!isCombi && planned.legs[0].match ? ` · ${formatKickoff(planned.legs[0].match.commenceTime)}` : ''}
             {isCombi && !planned.bookmaker ? 'Nog geen bookmaker gekozen' : ''}
             {planned.bookmaker && <span className="bet-tag">{planned.bookmaker}</span>}
@@ -174,6 +177,7 @@ function PlannedBetRow({ planned, bookmakers, onPlaced, onRemoved, onError }) {
                 <span className="leg-match">{legLabel(leg)}</span>
                 <span className="muted">
                   {describeBet(leg)}
+                  <EarlyPayoutBadge leg={leg} />
                   {leg.match ? ` · ${formatKickoff(leg.match.commenceTime)}` : ''}
                 </span>
               </div>

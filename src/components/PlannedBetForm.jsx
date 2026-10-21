@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { MARKETS, selectionOptions, describeBet, isLineMarket } from '../markets.js';
 import MatchPicker from './MatchPicker.jsx';
 import DecimalInput from './DecimalInput.jsx';
+import { EarlyPayoutToggle } from './EarlyPayoutBadge.jsx';
 
 const EMPTY_LEG_DRAFT = {
   market: 'team_wint',
@@ -200,6 +201,7 @@ export default function PlannedBetForm({ onCreated }) {
           selection: leg.selection,
           line: leg.line,
           odds: leg.odds,
+          earlyPayout: Boolean(leg.earlyPayout),
         })),
       });
       onCreated(created);
@@ -399,6 +401,7 @@ export default function PlannedBetForm({ onCreated }) {
               <b>{leg.label}</b>
               {describeBet(leg)}
             </div>
+            <EarlyPayoutToggle value={leg.earlyPayout} onChange={(on) => setLegs((ls) => ls.map((l) => (l.key === leg.key ? { ...l, earlyPayout: on } : l)))} />
             <div className={`pick-row-odds${leg.odds ? '' : ' is-empty'}`}>{leg.odds ? Number(leg.odds).toFixed(2) : 'nog geen odds'}</div>
             <button type="button" className="del" onClick={() => removeLeg(leg.key)} title="Verwijderen">
               ×

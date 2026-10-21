@@ -3,6 +3,8 @@
 // het als bewerkbare preview en niets wordt opgeslagen voor de gebruiker het
 // bevestigt.
 
+import { applyEarlyPayout } from './earlyPayout.js';
+
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
 const ALLOWED_MEDIA_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
@@ -157,5 +159,11 @@ async function runExtraction(content) {
     }
   }
   if (bets && !Array.isArray(bets) && Array.isArray(bets.bets)) bets = bets.bets;
-  return { bets: Array.isArray(bets) ? bets : [], skippedKnown: Number(toolUse?.input?.skippedKnown) || 0 };
+  // "Vroege uitbetaling" uit de tekst halen en als vlag op de leg zetten, zodat
+  // de preview in de importmodal al de EP-markering toont.
+  const cleaned = (Array.isArray(bets) ? bets : []).map((bet) => ({
+    ...bet,
+    legs: Array.isArray(bet?.legs) ? bet.legs.map((leg) => applyEarlyPayout(leg || {})) : bet?.legs,
+  }));
+  return { bets: cleaned, skippedKnown: Number(toolUse?.input?.skippedKnown) || 0 };
 }
