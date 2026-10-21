@@ -254,6 +254,7 @@ function serializeBet(row, legRows) {
     odds: Number(row.odds),
     stake: Number(row.stake),
     potentialPayout: Number(row.potential_payout),
+    cashoutAmount: row.cashout_amount === null ? null : Number(row.cashout_amount),
     status: row.status,
     source: row.source,
     placedAt: row.placed_at,
@@ -571,6 +572,21 @@ app.patch('/api/bets/:id', async (req, res) => {
       }
       updates.status = req.body.status;
       updates.settled_at = req.body.status === 'open' ? null : await estimateSettledAt(id);
+      if (req.body.status !== 'cashed_out') updates.cashout_amount = null;
+    }
+    // Cash-outbedrag staat los van potential_payout (die blijft de
+    // oorspronkelijke mogelijke uitbetaling). Alleen zinvol bij een cash-out.
+    if (req.body.cashoutAmount !== undefined) {
+      const nextStatus = updates.status ?? existing.status;
+      const amount = Number(req.body.cashoutAmount);
+      if (nextStatus !== 'cashed_out' || !Number.isFinite(amount) || amount < 0) {
+        res.status(400).json({ error: 'cashoutAmount kan alleen (≥ 0) bij een cash-out' });
+        return;
+      }
+      updates.cashout_amount = amount;
+    } else if (req.body.status === 'cashed_out' && existing.status !== 'cashed_out') {
+      res.status(400).json({ error: 'cashoutAmount is verplicht bij een cash-out' });
+      return;
     }
     // placedAt achteraf corrigeren (bv. een bet die 's avonds laat is
     // geplaatst maar bij de vorige dag hoort) - los van EDITABLE_BET_FIELDS
@@ -893,7 +909,8 @@ async function buildBookmakerLedger(bookmaker) {
   for (const bet of bets) {
     events.push({ at: new Date(bet.placedAt), kind: 'stake', amount: -bet.stake, label: `Ingezet — ${betLabel(bet)}` });
     if (bet.status === 'won' || bet.status === 'cashed_out') {
-      events.push({ at: new Date(bet.settledAt), kind: 'winst', amount: bet.potentialPayout, label: `Winst — ${betLabel(bet)}` });
+      const amount = bet.status === 'cashed_out' ? bet.cashoutAmount : bet.potentialPayout;
+      events.push({ at: new Date(bet.settledAt), kind: 'winst', amount, label: `Winst — ${betLabel(bet)}` });
     } else if (bet.status === 'void') {
       events.push({ at: new Date(bet.settledAt), kind: 'void', amount: bet.stake, label: `Void — ${betLabel(bet)}` });
     }

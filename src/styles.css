@@ -1406,6 +1406,18 @@ body {
 .bet-numbers .payout {
   color: rgba(244, 242, 232, 0.55);
 }
+.bet-numbers .payout-cashed-out {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.bet-numbers .payout-original {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+.bet-numbers .payout-cashout {
+  color: var(--chalk);
+}
 
 .status-badge {
   font-family: 'Oswald', sans-serif;

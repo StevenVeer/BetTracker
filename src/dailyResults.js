@@ -15,7 +15,7 @@ export function todayKey() {
 // break-even telt als void (zoals een push).
 export function betOutcome(bet) {
   if (bet.status !== 'cashed_out') return bet.status;
-  const payout = Number(bet.potentialPayout);
+  const payout = Number(bet.cashoutAmount);
   const stake = Number(bet.stake);
   if (payout > stake) return 'won';
   if (payout < stake) return 'lost';
@@ -23,7 +23,8 @@ export function betOutcome(bet) {
 }
 
 export function betWinst(bet) {
-  if (bet.status === 'won' || bet.status === 'cashed_out') return Number(bet.potentialPayout);
+  if (bet.status === 'won') return Number(bet.potentialPayout);
+  if (bet.status === 'cashed_out') return Number(bet.cashoutAmount);
   if (bet.status === 'void') return Number(bet.stake);
   return 0;
 }

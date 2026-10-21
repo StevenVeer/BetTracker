@@ -222,8 +222,31 @@ function cashoutClass(bet) {
   return outcome === 'won' || outcome === 'lost' ? ` cashout-${outcome}` : '';
 }
 
-// Cashout vraagt eerst het daadwerkelijk uitbetaalde bedrag - dat wordt de
-// payout van de bet, zodat winst/ROI en de win/verlies-telling kloppen.
+// Uitbetaling op de bet-rij. Bij een cash-out blijft de oorspronkelijke
+// mogelijke uitbetaling zichtbaar (doorgestreept) naast het echte bedrag.
+function PayoutCell({ bet }) {
+  if (bet.status === 'cashed_out' && bet.cashoutAmount != null) {
+    return (
+      <span className="payout payout-cashed-out">
+        <span className="payout-original" title="Oorspronkelijke mogelijke uitbetaling">
+          → <Amount>{`EUR ${Number(bet.potentialPayout).toFixed(2)}`}</Amount>
+        </span>
+        <span className="payout-cashout" title="Cash-outbedrag">
+          CO <Amount>{`EUR ${Number(bet.cashoutAmount).toFixed(2)}`}</Amount>
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span className="payout">
+      → <Amount>{`EUR ${Number(bet.potentialPayout).toFixed(2)}`}</Amount>
+    </span>
+  );
+}
+
+// Cashout vraagt eerst het daadwerkelijk uitbetaalde bedrag - dat komt in
+// cashoutAmount (los van de mogelijke uitbetaling), zodat winst/ROI en de
+// win/verlies-telling kloppen.
 function CashoutForm({ bet, onConfirm, onCancel }) {
   const [amount, setAmount] = useState('');
   const value = Number(amount);
@@ -325,6 +348,7 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
     odds: Number(bet.odds).toFixed(2),
     stake: Number(bet.stake).toFixed(2),
     payout: Number(bet.potentialPayout).toFixed(2),
+    cashout: bet.cashoutAmount != null ? Number(bet.cashoutAmount).toFixed(2) : '',
     placedAt: toDatetimeLocalValue(bet.placedAt),
     settledAt: toDatetimeLocalValue(bet.settledAt),
   };
@@ -429,6 +453,7 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
     betPatch.odds = Number(fields.odds);
     betPatch.potentialPayout = Number(fields.payout);
   }
+  if (bet.status === 'cashed_out' && fields.cashout !== '' && numChanged(fields.cashout, bet.cashoutAmount)) betPatch.cashoutAmount = Number(fields.cashout);
   if (fields.placedAt && fields.placedAt !== initialFields.placedAt) betPatch.placedAt = new Date(fields.placedAt).toISOString();
   if (fields.settledAt && fields.settledAt !== initialFields.settledAt) betPatch.settledAt = new Date(fields.settledAt).toISOString();
 
@@ -588,6 +613,16 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
                 }}
               />
             </label>
+            {bet.status === 'cashed_out' && (
+              <label>
+                Cashout €
+                <DecimalInput
+                  className="odds-edit-input payout-edit-input"
+                  value={fields.cashout}
+                  onChange={(e) => setField('cashout', e.target.value)}
+                />
+              </label>
+            )}
             <label className="eb-dates">
               <span className="muted">geplaatst</span>
               <input
@@ -747,9 +782,7 @@ export default function BetList({ bets, onUpdate, onUpdateLeg, onDelete, onLiveL
                       <span>
                         EUR <Amount>{Number(bet.stake).toFixed(2)}</Amount>
                       </span>
-                      <span className="payout">
-                        → <Amount>{`EUR ${Number(bet.potentialPayout).toFixed(2)}`}</Amount>
-                      </span>
+                      <PayoutCell bet={bet} />
                     </span>
                     <span className={`status-badge status-${bet.status}${cashoutClass(bet)}`}>{STATUS_LABELS[bet.status]}</span>
                   </div>
@@ -774,9 +807,7 @@ export default function BetList({ bets, onUpdate, onUpdateLeg, onDelete, onLiveL
                     <span>
                       EUR <Amount>{Number(bet.stake).toFixed(2)}</Amount>
                     </span>
-                    <span className="payout">
-                      → <Amount>{`EUR ${Number(bet.potentialPayout).toFixed(2)}`}</Amount>
-                    </span>
+                    <PayoutCell bet={bet} />
                   </div>
                   <ScoreBadge leg={bet.legs[0]} onLinked={onLiveLinked} />
                   <span className={`status-badge status-${bet.status}${cashoutClass(bet)}`}>{STATUS_LABELS[bet.status]}</span>
@@ -790,7 +821,7 @@ export default function BetList({ bets, onUpdate, onUpdateLeg, onDelete, onLiveL
                       bet={bet}
                       onCancel={() => setCashoutId(null)}
                       onConfirm={async (amount) => {
-                        await onUpdate(bet.id, { status: 'cashed_out', potentialPayout: amount });
+                        await onUpdate(bet.id, { status: 'cashed_out', cashoutAmount: amount });
                         setCashoutId(null);
                       }}
                     />

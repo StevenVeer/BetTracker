@@ -74,6 +74,13 @@ export function ensureSchema() {
       alter table bet_legs add column if not exists parts jsonb;
       -- Vroege uitbetaling (zie earlyPayout.js): vlag i.p.v. tekst in selection.
       alter table bet_legs add column if not exists early_payout boolean not null default false;
+      -- Daadwerkelijk uitbetaald cash-outbedrag, los van potential_payout zodat
+      -- de oorspronkelijke mogelijke uitbetaling zichtbaar blijft. Oudere
+      -- cash-outs hadden het bedrag ín potential_payout staan: eenmalig
+      -- verplaatsen en de mogelijke uitbetaling herleiden uit odds × inzet.
+      alter table bets add column if not exists cashout_amount numeric;
+      update bets set cashout_amount = potential_payout, potential_payout = odds * stake
+        where status = 'cashed_out' and cashout_amount is null;
 
       create table if not exists bookmaker_withdrawals (
         id text primary key,

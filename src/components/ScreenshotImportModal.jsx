@@ -110,11 +110,12 @@ function toDraft(bet, bookmakers) {
     bookmaker: match || '',
     stake: bet.stake != null ? String(bet.stake) : '',
     // Ontbreken de totale odds maar zijn inzet en uitbetaling wel zichtbaar,
-    // dan volgen de odds daaruit.
+    // dan volgen de odds daaruit (niet bij een cash-out: dat bedrag zegt
+    // niets over de odds).
     odds:
       bet.odds != null
         ? String(bet.odds)
-        : bet.stake > 0 && bet.payout > 0
+        : bet.status !== 'cashed_out' && bet.stake > 0 && bet.payout > 0
           ? String(Math.round((bet.payout / bet.stake) * 100) / 100)
           : '',
     status: bet.status || 'open',
@@ -316,7 +317,9 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
           stake: Number(draft.stake),
           odds: totalOdds,
           // Bij verloren/void geen override: de uitbetaling is dan niet relevant.
-          potentialPayout: draft.payout !== '' && !['lost', 'void'].includes(draft.status) ? Number(draft.payout) : undefined,
+          // Bij een cash-out is het bedrag de cash-out zelf (cashoutAmount
+          // hieronder); de mogelijke uitbetaling volgt dan uit odds × inzet.
+          potentialPayout: draft.payout !== '' && !['lost', 'void', 'cashed_out'].includes(draft.status) ? Number(draft.payout) : undefined,
           placedAt: draft.placedAt ? new Date(draft.placedAt).toISOString() : undefined,
           notes: draft.notes || undefined,
           legs: draft.legs.map((leg) => ({
@@ -334,6 +337,7 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
         let final = bet;
         if (draft.status !== 'open') {
           const patch = { status: draft.status };
+          if (draft.status === 'cashed_out') patch.cashoutAmount = draft.payout !== '' ? Number(draft.payout) : 0;
           if (draft.settledAt) patch.settledAt = draft.settledAt;
           final = await api.updateBet(bet.id, patch);
         }
