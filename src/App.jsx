@@ -24,7 +24,6 @@ const FILTERS = [
 
 const VIEWS = [
   { key: 'bets', label: 'Bets' },
-  { key: 'telegram', label: 'Telegram Picks' },
   { key: 'overview', label: 'Overzicht' },
   { key: 'live', label: 'Live' },
 ];
@@ -92,15 +91,13 @@ export default function App() {
   const [bets, setBets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  // Welke pick-popup open staat: { source: 'own' | 'telegram', kind: 'open' | 'unsettled' }.
+  // Welke pick-popup open staat: 'open' | 'unsettled' | null.
   const [picksModal, setPicksModal] = useState(null);
   const [plannedBets, setPlannedBets] = useState([]);
   const [showPlanned, setShowPlanned] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  // Koppelsuggesties (beide bronnen in één lijst, per tab gefilterd) en welke
-  // bron er in de suggestie-modal openstaat: 'manual' | 'telegram' | null.
   const [linkSuggestions, setLinkSuggestions] = useState([]);
-  const [suggestionsSource, setSuggestionsSource] = useState(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [showKickoffs, setShowKickoffs] = useState(false);
   // Geopend vanuit de browserextensie: ?import=<id> opent de import-modal voor
   // die pagina. De parameter halen we meteen weg, zodat een refresh hem niet
@@ -114,17 +111,12 @@ export default function App() {
   }, [pageImportId]);
   const [scoresUsage, setScoresUsage] = useState(null);
   const [refreshingScores, setRefreshingScores] = useState(false);
-  const [telegramBets, setTelegramBets] = useState([]);
-  const [telegramFilter, setTelegramFilter] = useState('open');
-  const [refreshingTelegramOdds, setRefreshingTelegramOdds] = useState(false);
-  const [backfillingTelegram, setBackfillingTelegram] = useState(false);
-  const [backfillSummary, setBackfillSummary] = useState(null);
   const [liveOverlay, setLiveOverlay] = useState({});
   const [liveFeed, setLiveFeed] = useState({ updatedAt: null, error: null });
   const { permission: notifPermission, enabled: notifEnabled, setEnabled: setNotifEnabled, requestPermission: requestNotifPermission } =
     useNotificationPreference();
   const { visible: amountsVisible, setVisible: setAmountsVisible } = useAmountsVisible();
-  useSettlementNotifications(bets, telegramBets, notifEnabled);
+  useSettlementNotifications(bets, notifEnabled);
 
   // `loading` start op true en gaat alleen na de eerste load uit - latere
   // reloads (na een live-koppeling of scores ophalen) verversen stil, anders
@@ -137,17 +129,12 @@ export default function App() {
       .finally(() => setLoading(false));
   }
 
-  function loadTelegramBets() {
-    api.getBets('all', 'telegram').then(setTelegramBets).catch((err) => setError(err.message));
-  }
-
   function loadPlannedBets() {
     api.getPlannedBets().then(setPlannedBets).catch((err) => setError(err.message));
   }
 
   useEffect(() => {
     loadBets();
-    loadTelegramBets();
     loadPlannedBets();
     api
       .getScoresUsage()
@@ -187,16 +174,10 @@ export default function App() {
     loadBets();
   }
 
-  function handleTelegramLiveLinked() {
-    loadLiveOverlay();
-    loadLinkSuggestions();
-    loadTelegramBets();
-  }
-
   // Bij openen altijd vers ophalen - de lijst van de laatste poll kan nog van
   // vóór een net toegevoegde bet zijn.
-  function openSuggestions(source) {
-    setSuggestionsSource(source);
+  function openSuggestions() {
+    setShowSuggestions(true);
     loadLinkSuggestions();
   }
 
@@ -229,7 +210,6 @@ export default function App() {
       const { usage } = await api.refreshScores();
       setScoresUsage(usage);
       loadBets();
-      loadTelegramBets();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -249,71 +229,11 @@ export default function App() {
     onClick: handleRefreshScores,
   };
 
-  async function handleRefreshTelegramOdds() {
-    setRefreshingTelegramOdds(true);
-    try {
-      await api.refreshTelegramOdds();
-      loadTelegramBets();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setRefreshingTelegramOdds(false);
-    }
-  }
-
-  async function handleBackfillTelegram() {
-    setBackfillingTelegram(true);
-    setBackfillSummary(null);
-    try {
-      const result = await api.backfillTelegram();
-      setBackfillSummary(result);
-      loadTelegramBets();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBackfillingTelegram(false);
-    }
-  }
-
-  async function handleTelegramUpdate(id, patch) {
-    try {
-      const updated = await api.updateBet(id, patch);
-      setTelegramBets((prev) => prev.map((b) => (b.id === id ? updated : b)));
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  async function handleTelegramLegUpdate(legId, patch) {
-    try {
-      const updated = await api.updateLeg(legId, patch);
-      setTelegramBets((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
-      loadLinkSuggestions();
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  async function handleTelegramDelete(id) {
-    try {
-      await api.deleteBet(id);
-      setTelegramBets((prev) => prev.filter((b) => b.id !== id));
-      loadLinkSuggestions();
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
   const overlaidBets = useMemo(() => applyLiveOverlay(bets, liveOverlay), [bets, liveOverlay]);
-  const overlaidTelegramBets = useMemo(() => applyLiveOverlay(telegramBets, liveOverlay), [telegramBets, liveOverlay]);
 
   const visibleBets = useMemo(
     () => (filter === 'all' ? overlaidBets : overlaidBets.filter((b) => b.status === filter || (filter !== 'open' && betOutcome(b) === filter))),
     [overlaidBets, filter]
-  );
-  const visibleTelegramBets = useMemo(
-    () => (telegramFilter === 'all' ? overlaidTelegramBets : overlaidTelegramBets.filter((b) => b.status === telegramFilter || (telegramFilter !== 'open' && betOutcome(b) === telegramFilter))),
-    [overlaidTelegramBets, telegramFilter]
   );
 
   // "Live" = nog open / onafgehandeld, ongeacht of er al een wedstrijd bezig is.
@@ -337,13 +257,7 @@ export default function App() {
   // Legs die nog open staan bij een al verloren bet zijn "onafgehandeld": die staan apart
   // (knop "Onafgehandeld") zodat je ze later nog alsnog op gewonnen/verloren kunt zetten.
   const { openPicks, unsettledPicks } = useMemo(() => splitPicks(overlaidBets), [overlaidBets]);
-  const { openPicks: telegramOpenPicks, unsettledPicks: telegramUnsettledPicks } = useMemo(
-    () => splitPicks(overlaidTelegramBets),
-    [overlaidTelegramBets]
-  );
 
-  const ownSuggestions = useMemo(() => linkSuggestions.filter((s) => s.source === 'manual'), [linkSuggestions]);
-  const telegramSuggestions = useMemo(() => linkSuggestions.filter((s) => s.source === 'telegram'), [linkSuggestions]);
   const countWithCandidates = (items) => items.filter((s) => s.candidates.length > 0).length;
   const manualOpenPicks = useMemo(() => openPicks.filter((p) => !p.match), [openPicks]);
   const missingKickoffs = useMemo(
@@ -473,89 +387,9 @@ export default function App() {
       </nav>
 
       {view === 'overview' ? (
-        <Overview bets={bets} telegramBets={telegramBets} />
+        <Overview bets={bets} />
       ) : view === 'live' ? (
         <LiveScores onSettleLeg={handleLegUpdate} />
-      ) : view === 'telegram' ? (
-        <>
-          <div className="toolbar">
-            <div className="toolbar-filters">
-              <nav className="filters">
-                {FILTERS.map((f) => (
-                  <button
-                    key={f.key}
-                    className={`filter-tab ${telegramFilter === f.key ? 'is-active' : ''}`}
-                    onClick={() => setTelegramFilter(f.key)}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </nav>
-              <CountButton
-                icon="list"
-                label="Open bets"
-                count={telegramOpenPicks.length}
-                onClick={() => setPicksModal({ source: 'telegram', kind: 'open' })}
-              />
-              {telegramUnsettledPicks.length > 0 && (
-                <CountButton
-                  icon="alert"
-                  label="Onafgehandeld"
-                  count={telegramUnsettledPicks.length}
-                  warn
-                  onClick={() => setPicksModal({ source: 'telegram', kind: 'unsettled' })}
-                />
-              )}
-              {countWithCandidates(telegramSuggestions) > 0 && (
-                <CountButton
-                  icon="link"
-                  label="Koppelsuggesties"
-                  count={countWithCandidates(telegramSuggestions)}
-                  onClick={() => openSuggestions('telegram')}
-                />
-              )}
-            </div>
-            <MoreMenu
-              items={[
-                {
-                  key: 'odds',
-                  icon: 'send',
-                  label: refreshingTelegramOdds ? 'Odds ophalen…' : 'Odds ophalen',
-                  disabled: refreshingTelegramOdds,
-                  onClick: handleRefreshTelegramOdds,
-                },
-                {
-                  key: 'backfill',
-                  icon: 'history',
-                  label: backfillingTelegram ? 'Backfill…' : 'Backfill',
-                  disabled: backfillingTelegram,
-                  onClick: handleBackfillTelegram,
-                },
-                scoresMenuItem,
-              ]}
-            />
-          </div>
-          <LiveStatus updatedAt={liveFeed.updatedAt} error={liveFeed.error} onRefresh={loadLiveOverlay} />
-
-          {error && <p className="error-text">{error}</p>}
-          {backfillSummary && (
-            <p className="hint-text">
-              Backfill: {backfillSummary.processed} bericht(en) gescand sinds{' '}
-              {new Date(backfillSummary.since).toLocaleString('nl-NL')}, {backfillSummary.betsCreated} nieuwe bet(s)
-              {backfillSummary.alreadyProcessed > 0 ? `, ${backfillSummary.alreadyProcessed} al bekend` : ''}
-              {backfillSummary.duplicateParlay > 0 ? `, ${backfillSummary.duplicateParlay} dubbele parlay overgeslagen` : ''}
-              {' '}({(backfillSummary.durationMs / 1000).toFixed(1)}s)
-            </p>
-          )}
-          <BetList
-            key={`telegram-${telegramFilter}`}
-            bets={visibleTelegramBets}
-            onUpdate={handleTelegramUpdate}
-            onUpdateLeg={handleTelegramLegUpdate}
-            onDelete={handleTelegramDelete}
-            onLiveLinked={handleTelegramLiveLinked}
-          />
-        </>
       ) : (
         <>
           <div className="toolbar">
@@ -575,7 +409,7 @@ export default function App() {
                 icon="list"
                 label="Open bets"
                 count={openPicks.length}
-                onClick={() => setPicksModal({ source: 'own', kind: 'open' })}
+                onClick={() => setPicksModal('open')}
               />
               {unsettledPicks.length > 0 && (
                 <CountButton
@@ -583,15 +417,15 @@ export default function App() {
                   label="Onafgehandeld"
                   count={unsettledPicks.length}
                   warn
-                  onClick={() => setPicksModal({ source: 'own', kind: 'unsettled' })}
+                  onClick={() => setPicksModal('unsettled')}
                 />
               )}
               <CountButton icon="bookmark" label="Gepland" count={plannedBets.length} onClick={() => setShowPlanned(true)} />
               <CountButton
                 icon="link"
                 label="Koppelsuggesties"
-                count={countWithCandidates(ownSuggestions)}
-                onClick={() => openSuggestions('manual')}
+                count={countWithCandidates(linkSuggestions)}
+                onClick={openSuggestions}
               />
               <CountButton
                 icon="clock"
@@ -629,24 +463,20 @@ export default function App() {
 
       {picksModal && (
         <OpenBetsModal
-          picks={
-            picksModal.source === 'telegram'
-              ? picksModal.kind === 'open' ? telegramOpenPicks : telegramUnsettledPicks
-              : picksModal.kind === 'open' ? openPicks : unsettledPicks
-          }
-          title={picksModal.kind === 'open' ? 'Open bets' : 'Onafgehandeld (verloren bets)'}
-          emptyText={picksModal.kind === 'open' ? 'Geen open picks.' : 'Alles afgehandeld.'}
+          picks={picksModal === 'open' ? openPicks : unsettledPicks}
+          title={picksModal === 'open' ? 'Open bets' : 'Onafgehandeld (verloren bets)'}
+          emptyText={picksModal === 'open' ? 'Geen open picks.' : 'Alles afgehandeld.'}
           onClose={() => setPicksModal(null)}
-          onLiveLinked={picksModal.source === 'telegram' ? handleTelegramLiveLinked : handleLiveLinked}
-          onSettle={picksModal.source === 'telegram' ? handleTelegramLegUpdate : handleLegUpdate}
+          onLiveLinked={handleLiveLinked}
+          onSettle={handleLegUpdate}
         />
       )}
 
-      {suggestionsSource && (
+      {showSuggestions && (
         <LinkSuggestionsModal
-          items={suggestionsSource === 'telegram' ? telegramSuggestions : ownSuggestions}
-          onLinked={suggestionsSource === 'telegram' ? handleTelegramLiveLinked : handleLiveLinked}
-          onClose={() => setSuggestionsSource(null)}
+          items={linkSuggestions}
+          onLinked={handleLiveLinked}
+          onClose={() => setShowSuggestions(false)}
         />
       )}
 

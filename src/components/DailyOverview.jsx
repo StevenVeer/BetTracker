@@ -83,7 +83,7 @@ function DayDetail({ day, onBack }) {
   );
 }
 
-export default function DailyOverview({ bets, telegramBets = [] }) {
+export default function DailyOverview({ bets }) {
   const [selectedDate, setSelectedDate] = useState(null);
 
   const days = groupByDay(bets);
@@ -96,7 +96,7 @@ export default function DailyOverview({ bets, telegramBets = [] }) {
 
   return (
     <div className="bookmaker-overview">
-      <EquityCurve bets={bets} telegramBets={telegramBets} />
+      <EquityCurve bets={bets} />
       <div className="bookmaker-hero">
         <h3>Overzicht per dag</h3>
       </div>

@@ -306,7 +306,7 @@ const MATCH_TIME_WINDOW_MS = 18 * 60 * 60 * 1000;
 
 // Live-overlay voor open picks (zie /api/live-scores/open-matches in
 // index.js) - matcht op exact dezelfde competitienaam (beide kanten gebruiken
-// leagues.js) en fuzzy teamnamen (zelfde matcher als bij de Telegram-picks).
+// leagues.js) en fuzzy teamnamen.
 // Puur informatief: dit raakt nooit bet_legs.status of een payout, alleen de
 // weergave van een nog open pick. Mislukt de match, dan blijft de bestaande
 // "Live scores ophalen"-knop gewoon werken zoals altijd.

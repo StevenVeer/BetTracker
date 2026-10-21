@@ -1,18 +1,17 @@
 # Bet Tracker
 
-Persoonlijk, single-user dashboard voor voetbalweddenschappen: wat je hebt gezet, bij welke bookmaker, tegen welke odds en inzet, en hoe je ervoor staat. Bets worden (deels) automatisch afgehandeld via live scores, en je kunt ze invoeren met de hand, via een screenshot, via de browserextensie of via een Telegram-groep.
+Persoonlijk, single-user dashboard voor voetbalweddenschappen: wat je hebt gezet, bij welke bookmaker, tegen welke odds en inzet, en hoe je ervoor staat. Bets worden (deels) automatisch afgehandeld via live scores, en je kunt ze invoeren met de hand, via een screenshot of via de browserextensie.
 
 Frontend: React + Vite. Backend: Express + Postgres. Alles draait lokaal via Docker Compose.
 
 ## Functies
 
-- **Bets** – invoeren (wedstrijd, markt, odds, inzet; ook combi's met meerdere legs), filteren op status en bron, handmatig settelen.
+- **Bets** – invoeren (wedstrijd, markt, odds, inzet; ook combi's met meerdere legs), filteren op status, handmatig settelen.
 - **Automatische settlement** – op aanvraag haalt de server scores op bij The Odds API en settelt de markten `1x2`, `dubbelkans`, `btts` en `over_under`. Andere markten (bv. `anders`) blijven open voor handmatige settlement.
 - **Live scores** – los overzicht van lopende wedstrijden via ESPN's publieke scoreboard-API (gratis, geen key, wel onofficieel), met favorieten en een handmatige koppeling van een wedstrijd aan een live-ID als de automatische match misgrijpt. Klik op een wedstrijd voor een detailpagina met statistieken (balbezit, schoten, corners, passes, kaarten), tijdlijn, opstellingen en een afgeleide druk-grafiek. Pressure, big chances, xG en een shotmap leveren gratis bronnen niet.
 - **Geplande bets** – opzetjes zonder inzet; "plaatsen" maakt er een echte bet van.
 - **Screenshot-import** – bets uit screenshots van een bookmaker-app halen via de Anthropic API. Het resultaat is alleen een voorstel: je bewerkt en bevestigt het voordat er iets wordt opgeslagen.
 - **Browserextensie** (`extension/`) – één klik op een bookmakerpagina stuurt de paginatekst (met een screenshot als terugval) naar de app, die de import-modal opent met de gevonden bets. Zie "Browserextensie installeren".
-- **Telegram-import** – leest live mee in één Telegram-groep, parset picks (incl. parlays) en toont ze ter vergelijking met je eigen bets. Optioneel: zonder Telegram-config draait de rest gewoon.
 - **Bookmaker-overzicht** – saldo per bookmaker met ledger: stortingen, opnames en correcties. Een tekort bij het plaatsen van een bet wordt automatisch als storting gelogd.
 - **ING-rekening** – eigen kaart en ledger voor je bankrekening, met overboekingen die live worden afgeleid uit de bookmaker-stortingen en -opnames.
 - **Overzichten** – resultaat per dag, rendement per markt en een equity curve.
@@ -60,26 +59,7 @@ Zie `.env.example`.
 | `POSTGRES_PASSWORD` | Database (verplicht) |
 | `ODDS_API_KEY` | Wedstrijden en settlement via The Odds API (verplicht) |
 | `ANTHROPIC_API_KEY` | Screenshot- en pagina-import (optioneel; model overschrijfbaar met `ANTHROPIC_MODEL`) |
-| `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` | Telegram-koppeling, aan te maken op my.telegram.org |
-| `TELEGRAM_SESSION` | Sessiestring van het ingelogde account (zie hieronder) |
-| `TELEGRAM_GROUP_ID` | De groep waarin wordt meegelezen |
-| `TELEGRAM_BACKFILL_SINCE` | Vanaf wanneer een backfill berichten ophaalt |
-| `TELEGRAM_ASSUMED_STAKE` | Aangenomen inzet voor geïmporteerde Telegram-picks |
 | `LIVE_SCORES_POLL_MS` | Poll-interval live scores, standaard 20000 ms |
-
-Telegram is optioneel: ontbreekt een van de `TELEGRAM_*`-waarden, dan draait de app zonder Telegram-import.
-
-### Eenmalig inloggen bij Telegram
-
-Uitvoeren vanuit `server/`, in twee losse stappen (de code bestaat pas nadat Telegram hem verstuurt):
-
-```bash
-node telegram-login.js send +31612345678
-node telegram-login.js confirm <code> [2fa-wachtwoord]
-node telegram-login.js list-groups     # chat-ID's opzoeken voor TELEGRAM_GROUP_ID
-```
-
-Zet de sessiestring die je krijgt in `.env` als `TELEGRAM_SESSION`.
 
 ## Browserextensie installeren
 
@@ -102,7 +82,6 @@ src/
     BetForm, BetList, MatchPicker           – bets invoeren en beheren
     PlannedBetForm, PlannedBetsModal        – geplande bets
     ScreenshotImportModal                   – screenshot-import
-    TelegramComparison                      – Telegram-picks naast eigen bets
     OpenBetsModal, LiveScores               – open bets en live scores
     BookmakerOverview                       – bookmaker- en ING-ledger
     Overview, DailyOverview, MarketOverview, EquityCurve  – overzichten
@@ -116,9 +95,6 @@ server/
   matchDetail.js             – ESPN-detailpagina: statistieken, tijdlijn, opstellingen, druk
   teamMatch.js               – fuzzy teamnaam-matching
   screenshotImport.js        – screenshot/paginatekst → bets via de Anthropic API
-  telegramClient.js          – luistert mee in de Telegram-groep
-  telegramParser.js          – picks/parlays uit berichten halen
-  telegram-login.js          – eenmalige Telegram-login
   reportGenerator.js         – export voor dag-/weekrapporten
 nginx.conf                   – serveert de frontend, proxyt /api/ naar de API
 docker-compose.yml           – db, api en web

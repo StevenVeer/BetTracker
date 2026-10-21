@@ -1,4 +1,4 @@
-// Fuzzy team-naam matching: Telegram-berichten gebruiken vaak bijnamen
+// Fuzzy team-naam matching: bronnen gebruiken vaak bijnamen
 // ("Man City", "Spurs") terwijl de Odds API de volledige naam levert
 // ("Manchester City", "Tottenham Hotspur"). Woord-voor-woord vergelijken na
 // het uitschrijven van bekende afkortingen dekt de meeste gevallen; de rest

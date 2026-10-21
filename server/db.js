@@ -49,10 +49,8 @@ export function ensureSchema() {
         source text not null default 'manual',
         placed_at timestamptz not null default now(),
         settled_at timestamptz,
-        notes text,
-        telegram_message_id text
+        notes text
       );
-      alter table bets add column if not exists telegram_message_id text;
 
       create table if not exists bet_legs (
         id text primary key,
@@ -132,12 +130,6 @@ export function ensureSchema() {
         requests_last int
       );
 
-      -- Telegram-parlays zijn gewoon bets (source='telegram') met meerdere
-      -- legs — geen aparte tabel nodig, ze hergebruiken dezelfde combi- en
-      -- settlement-logica als eigen bets. Vroegere losse telegram_picks-tabel
-      -- is niet meer in gebruik.
-      drop table if exists telegram_picks;
-
       -- Het geschreven rapport (markdown) dat je terugkrijgt nadat je een
       -- export uit /api/reports/export aan Claude hebt gegeven — hier
       -- opgeslagen zodat het in het dashboard zelf te bekijken is, niet
@@ -199,7 +191,6 @@ export function ensureSchema() {
 
       create index if not exists bets_status_idx on bets (status);
       create index if not exists bets_source_idx on bets (source);
-      create unique index if not exists bets_telegram_message_idx on bets (telegram_message_id) where telegram_message_id is not null;
       create index if not exists bet_legs_bet_id_idx on bet_legs (bet_id);
       create index if not exists bet_legs_match_id_idx on bet_legs (match_id);
       create index if not exists report_notes_source_idx on report_notes (source);

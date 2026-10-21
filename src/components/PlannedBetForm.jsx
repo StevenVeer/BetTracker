@@ -24,8 +24,7 @@ function needsLine(market) {
 }
 
 // 'anders' heeft geen vaste opties (zie markets.js) - daar is de vrije tekst
-// (draft.pick) zelf de selectie, net zoals bij een Telegram-pick die geen
-// markt kon worden toegewezen.
+// (draft.pick) zelf de selectie.
 function legSelectionFor(draft) {
   if (draft.market === 'correct_score') {
     if (draft.scoreHome === '' || draft.scoreAway === '') return '';

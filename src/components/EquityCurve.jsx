@@ -70,15 +70,14 @@ const CHART_W = 1320;
 const CHART_H = 200;
 const CHART_PAD = 14;
 
-export default function EquityCurve({ bets, telegramBets }) {
-  const [source, setSource] = useState('manual');
+export default function EquityCurve({ bets }) {
   const [granularity, setGranularity] = useState('day');
   const [collapsed, setCollapsed] = useState(true);
   const [hoverIndex, setHoverIndex] = useState(null);
 
   // Alleen afgeronde bets: een nog-open bet telt in groupByPlacedPeriod als
   // volledig verloren inzet (winst 0) en zou de curve onterecht laten dalen.
-  const settled = (source === 'manual' ? bets : telegramBets).filter((b) => b.status !== 'open');
+  const settled = bets.filter((b) => b.status !== 'open');
   const periods = groupByPlacedPeriod(settled, granularity);
   const series = buildSeries(periods, granularity);
   const hasData = series.length > 0;
@@ -92,7 +91,7 @@ export default function EquityCurve({ bets, telegramBets }) {
   // echte datapunten (1..n) zijn hoverbaar.
   const realPoints = hasData ? series.slice(1).map((p, i) => ({ ...p, ...chart.coords[i + 1] })) : [];
   const hovered = hoverIndex !== null ? realPoints[hoverIndex] : null;
-  const gradientId = `equityFill-${source}`;
+  const gradientId = 'equityFill';
 
   return (
     <div className={`equity-card ${collapsed ? 'is-collapsed' : ''}`}>
@@ -120,14 +119,6 @@ export default function EquityCurve({ bets, telegramBets }) {
                 {g.label}
               </button>
             ))}
-          </nav>
-          <nav className="filters">
-            <button type="button" className={`filter-tab ${source === 'manual' ? 'is-active' : ''}`} onClick={() => setSource('manual')}>
-              Eigen bets
-            </button>
-            <button type="button" className={`filter-tab ${source === 'telegram' ? 'is-active' : ''}`} onClick={() => setSource('telegram')}>
-              Telegram
-            </button>
           </nav>
           <button
             type="button"

@@ -10,9 +10,8 @@ function signedPct(n) {
   return `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
 }
 
-// yield is null zolang er nog geen enkele geprijsde leg is (bv. verse
-// telegram-picks vóór "Odds ophalen") - dan expliciet "—" tonen, nooit 0.0%,
-// want dat zou een echte nul-yield suggereren.
+// yield is null zolang er nog geen enkele geprijsde leg is - dan expliciet
+// "—" tonen, nooit 0.0%, want dat zou een echte nul-yield suggereren.
 function yieldFmt(n) {
   return n === null ? '—' : signedPct(n);
 }
@@ -37,7 +36,6 @@ function isLowSample(row) {
 }
 
 export default function MarketOverview() {
-  const [source, setSource] = useState('manual');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -49,11 +47,11 @@ export default function MarketOverview() {
     setExpanded({});
     setExpandedPicks({});
     api
-      .getMarketOverview(source)
+      .getMarketOverview()
       .then(setData)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [source]);
+  }, []);
 
   function toggle(marketKey) {
     setExpanded((prev) => ({ ...prev, [marketKey]: !prev[marketKey] }));
@@ -72,21 +70,12 @@ export default function MarketOverview() {
 
   return (
     <div>
-      <nav className="filters" style={{ marginBottom: 20 }}>
-        <button type="button" className={`filter-tab ${source === 'manual' ? 'is-active' : ''}`} onClick={() => setSource('manual')}>
-          Eigen bets
-        </button>
-        <button type="button" className={`filter-tab ${source === 'telegram' ? 'is-active' : ''}`} onClick={() => setSource('telegram')}>
-          Telegram
-        </button>
-      </nav>
-
       {error && <p className="error-text">{error}</p>}
 
       {loading ? (
         <p className="hint-text">Laden…</p>
       ) : markets.length === 0 ? (
-        <p className="hint-text">Nog geen afgehandelde bets voor deze bron.</p>
+        <p className="hint-text">Nog geen afgehandelde bets.</p>
       ) : (
         <>
           <div className="stat-row">
@@ -198,8 +187,7 @@ export default function MarketOverview() {
             <b>Yield</b> = fictief rendement bij gelijke inzet per pick, op basis van de eigen odds van elke selectie — geen echt geld,
             wel een eerlijke vergelijking tussen markten ook als bijna alles combi is.
             <br />
-            <b>S</b> = single · <b>C</b> = combi-leg. Hitrate telt alle legs, single én combi; yield telt alleen legs met een bekende odds
-            (een net-binnengekomen telegram-pick zonder odds telt dus wel mee in hitrate, nog niet in yield). Gesorteerd op yield
+            <b>S</b> = single · <b>C</b> = combi-leg. Hitrate telt alle legs, single én combi; Gesorteerd op yield
             (aflopend).
             <br />
             Rijen met minder dan {MIN_SAMPLE} legs (badge <b>n=…</b>) zijn gedempt — te weinig data voor een betrouwbaar signaal, en ze

@@ -17,11 +17,11 @@ function collectLegs(bets) {
 // we al een eerdere snapshot hadden - anders vuurt bij het allereerste laden
 // meteen een notificatie af voor elke pick die toevallig al afgehandeld was.
 // Werkt alleen zolang dit tabblad open is (geen service worker/push).
-export function useSettlementNotifications(bets, telegramBets, enabled) {
+export function useSettlementNotifications(bets, enabled) {
   const prevRef = useRef(null);
 
   useEffect(() => {
-    const current = collectLegs([...bets, ...telegramBets]);
+    const current = collectLegs(bets);
     const canNotify = enabled && typeof Notification !== 'undefined' && Notification.permission === 'granted';
 
     if (canNotify && prevRef.current) {
@@ -40,5 +40,5 @@ export function useSettlementNotifications(bets, telegramBets, enabled) {
     }
 
     prevRef.current = current;
-  }, [bets, telegramBets, enabled]);
+  }, [bets, enabled]);
 }

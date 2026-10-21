@@ -198,8 +198,7 @@ body {
   order: 3;
 }
 
-/* Rechts uitgelijnd: "+ Nieuwe bet" en daarachter het ⋯-menu. Op de
-   Telegram-pagina staat alleen het menu, ook rechts. */
+/* Rechts uitgelijnd: "+ Nieuwe bet" en daarachter het ⋯-menu. */
 .toolbar > .btn-primary,
 .toolbar > .tool-menu-anchor {
   margin-left: auto;

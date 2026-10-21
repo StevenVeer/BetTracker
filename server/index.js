@@ -3,11 +3,8 @@ import express from 'express';
 import cors from 'cors';
 import { randomUUID } from 'node:crypto';
 import { pool, ensureSchema } from './db.js';
-import { parseTelegramMessage, isResultRecap } from './telegramParser.js';
-import { teamNamesMatch } from './teamMatch.js';
-import { startTelegramListener, backfillMessages } from './telegramClient.js';
 import { buildReportExport } from './reportGenerator.js';
-import { getLiveScores, startLiveScoresPoller, findLiveMatchFor, findLiveMatchIdFor, getLiveMatchOverlayById, findLinkCandidates, amsterdamDateParts, amsterdamWallTimeToUtcMs, parseKickoffUtc, FINISHED_STATUSES } from './liveScores.js';
+import { getLiveScores, startLiveScoresPoller, findLiveMatchFor, findLiveMatchIdFor, getLiveMatchOverlayById, findLinkCandidates, parseKickoffUtc, FINISHED_STATUSES } from './liveScores.js';
 import { getMatchDetail } from './matchDetail.js';
 import { LEAGUES } from './leagues.js';
 import { extractBetsFromImages, extractBetsFromText } from './screenshotImport.js';
@@ -126,69 +123,6 @@ app.get('/api/matches', async (req, res) => {
     res.status(502).json({ error: error.message });
   }
 });
-
-// Zoekt bekende wedstrijden (uit de al-getrackte top-competities) rond een
-// Telegram-berichtdatum. Doorzoekt een venster van een dag terug tot een
-// paar dagen vooruit, want een pick wordt vaak eerder gepost dan de
-// wedstrijd zelf, en een "boom, deze ging erin"-recap juist erna.
-async function searchMatchesAround(aroundDate) {
-  const base = aroundDate ? new Date(aroundDate) : new Date();
-  const collected = [];
-  for (let offset = -1; offset <= 4; offset += 1) {
-    const d = new Date(base);
-    d.setUTCDate(d.getUTCDate() + offset);
-    const date = d.toISOString().slice(0, 10);
-    try {
-      const value = await getMatchesForDate(date);
-      collected.push(...value.matches);
-    } catch {
-      // negeren, gewoon minder wedstrijden om in te zoeken
-    }
-  }
-  return collected;
-}
-
-// Beide teamnamen bekend (in willekeurige volgorde t.o.v. de fixture).
-// Kiest, uit alle kandidaten die qua naam kloppen, het liefst de eerstvolgende
-// nog te spelen wedstrijd (voor een net binnengekomen pick) - en alleen als
-// zo'n team helemaal niets aankomends heeft, de meest recente al gespeelde
-// (nodig voor een "boom, deze ging erin"-recap van een net afgelopen
-// wedstrijd). Zonder deze voorkeur pakte een team dat zowel gisteren als over
-// een paar dagen speelt per ongeluk de wedstrijd van gisteren, omdat die als
-// eerste in de gesorteerde lijst staat.
-function pickBestMatch(candidates, aroundDate) {
-  if (candidates.length === 0) return null;
-  const postedTime = new Date(aroundDate || Date.now()).getTime();
-  const upcoming = candidates.filter((m) => new Date(m.commenceTime).getTime() >= postedTime);
-  if (upcoming.length > 0) return upcoming[0]; // candidates is al chronologisch gesorteerd
-  return candidates.reduce((latest, m) => (new Date(m.commenceTime) > new Date(latest.commenceTime) ? m : latest));
-}
-
-async function findMatchForTeams(nameA, nameB, aroundDate) {
-  const matches = await searchMatchesAround(aroundDate);
-  const candidates = matches.filter(
-    (m) =>
-      (teamNamesMatch(m.home, nameA) && teamNamesMatch(m.away, nameB)) ||
-      (teamNamesMatch(m.home, nameB) && teamNamesMatch(m.away, nameA))
-  );
-  return pickBestMatch(candidates, aroundDate);
-}
-
-// Maar 1 teamnaam bekend (bv. "Real Madrid to win or draw" - tegenstander
-// staat niet in de tekst). Geeft ook terug of dat team thuis of uit speelt.
-async function findMatchForSingleTeam(teamName, aroundDate) {
-  const matches = await searchMatchesAround(aroundDate);
-  const candidates = matches.filter((m) => teamNamesMatch(m.home, teamName) || teamNamesMatch(m.away, teamName));
-  const match = pickBestMatch(candidates, aroundDate);
-  if (!match) return null;
-  return { match, side: teamNamesMatch(match.home, teamName) ? 'home' : 'away' };
-}
-
-function sideOfTeamInMatch(match, teamName) {
-  if (teamNamesMatch(match.home, teamName)) return 'home';
-  if (teamNamesMatch(match.away, teamName)) return 'away';
-  return null;
-}
 
 app.get('/api/bookmakers', (req, res) => {
   res.json(BOOKMAKERS);
@@ -876,262 +810,6 @@ app.delete('/api/planned-bets/:id', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Telegram-picks
-//
-// Geen aparte tabel: een Telegram-parlay ís een bet (source='telegram') met
-// meerdere legs, precies zoals een eigen combi - dezelfde settlement-logica
-// (reevaluateBet) bepaalt dus ook hier of 1 verloren leg de hele parlay laat
-// vallen. telegramClient.js roept ingestTelegramMessage aan per bericht;
-// telegramParser.js heeft alleen-voetbal, alleen-herkenbare picks er al
-// uitgefilterd en gegroepeerd per "Safer"/"Riskier"-blok (= 1 parlay).
-// ---------------------------------------------------------------------------
-const TELEGRAM_ASSUMED_STAKE = Number(process.env.TELEGRAM_ASSUMED_STAKE || 100);
-
-// Voor elke pick-regel wordt hier de wedstrijd/kant opgezocht - dat kan de
-// parser zelf niet, want die kent alleen tekst, geen Odds API-data. Bij
-// "picked-vs-opponent"/"single-team" is zonder gevonden wedstrijd niet vast
-// te stellen of de gekozen kant "home" of "away" is (dubbelkans/team_wint
-// zijn fixture-relatief) - die vallen dan terug op de vrije 'anders'-markt,
-// net als een handmatig ingevoerde bet. Bij "two-team" (bv. over/under) is
-// de selectie al ondubbelzinnig uit de tekst zelf af te leiden, dus die
-// blijft gewoon zijn eigen markt houden, ook zonder gekoppelde wedstrijd.
-async function resolvePickLine(line, postedAt) {
-  if (line.kind === 'two-team') {
-    const found = await findMatchForTeams(line.home, line.away, postedAt);
-    if (!found) {
-      return { matchId: null, manualLabel: `${line.home} – ${line.away}`, market: line.market, selection: line.selection, lineValue: line.line ?? null };
-    }
-    return { matchId: await upsertMatch(found), manualLabel: null, market: line.market, selection: line.selection, lineValue: line.line ?? null };
-  }
-
-  if (line.kind === 'picked-vs-opponent') {
-    const found = await findMatchForTeams(line.pickedTeam, line.opponentTeam, postedAt);
-    const side = found ? sideOfTeamInMatch(found, line.pickedTeam) : null;
-    if (!found || !side) {
-      return { matchId: null, manualLabel: `${line.pickedTeam} – ${line.opponentTeam}`, market: 'anders', selection: line.lineText, lineValue: null };
-    }
-    return { matchId: await upsertMatch(found), manualLabel: null, market: line.market, selection: side, lineValue: null };
-  }
-
-  // 'single-team'
-  const found = await findMatchForSingleTeam(line.team, postedAt);
-  if (!found) {
-    return { matchId: null, manualLabel: line.team, market: 'anders', selection: line.lineText, lineValue: null };
-  }
-  const selection = line.market === 'dubbelkans' ? (found.side === 'home' ? 'home_draw' : 'draw_away') : found.side;
-  return { matchId: await upsertMatch(found.match), manualLabel: null, market: line.market, selection, lineValue: null };
-}
-
-function legSignature(leg) {
-  return `${leg.matchId || leg.manualLabel}|${leg.market}|${leg.selection}|${leg.lineValue ?? ''}`;
-}
-
-// "Boom, deze ging erin!"-berichten herhalen vaak letterlijk de picks van
-// eerder die dag als recap - zonder dedup zou dat dubbele parlays opleveren
-// die de win-rate/ROI scheeftrekken. Exact dezelfde set legs (wedstrijd +
-// markt + selectie, welke volgorde dan ook) binnen 48 uur telt als dezelfde
-// parlay.
-async function findDuplicateParlay(legs, postedAt) {
-  const windowStart = new Date(new Date(postedAt).getTime() - 48 * 3600 * 1000);
-  const recent = await fetchBetsWithLegs('where source = $1 and placed_at >= $2 and placed_at <= $3', [
-    'telegram',
-    windowStart,
-    postedAt,
-  ]);
-  const candidateSignature = legs.map(legSignature).sort().join('||');
-  return recent.some((bet) => {
-    const betSignature = bet.legs
-      .map((l) => `${l.match?.id || l.manualLabel}|${l.market}|${l.selection}|${l.line ?? ''}`)
-      .sort()
-      .join('||');
-    return betSignature === candidateSignature;
-  });
-}
-
-async function ingestTelegramMessage({ messageId, text, postedAt }) {
-  await ensureSchema();
-  const groups = parseTelegramMessage(text);
-  const stats = { betsCreated: 0, alreadyProcessed: 0, duplicateParlay: 0 };
-
-  if (groups.length === 0) {
-    if (isResultRecap(text)) {
-      console.log(`[telegram] bericht ${messageId}: recap-bericht (bevat bevestigingszin) genegeerd, geen picks ingelezen`);
-    }
-    return stats;
-  }
-
-  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
-    const group = groups[groupIndex];
-    const telegramMessageId = `${messageId}#${groupIndex}`;
-
-    // Al eerder verwerkt? Dan meteen stoppen, vóór de (dure) wedstrijd-lookups
-    // - anders zou een herhaalde backfill vanaf dezelfde ankerdatum steeds
-    // opnieuw Odds API-credits verbruiken voor berichten die al bets zijn.
-    const { rows: existing } = await pool.query('select 1 from bets where telegram_message_id = $1', [telegramMessageId]);
-    if (existing.length > 0) {
-      stats.alreadyProcessed += 1;
-      continue;
-    }
-
-    const legs = [];
-    for (const line of group) {
-      legs.push(await resolvePickLine(line, postedAt));
-    }
-    if (legs.length === 0) continue;
-    if (await findDuplicateParlay(legs, postedAt)) {
-      stats.duplicateParlay += 1;
-      continue;
-    }
-
-    const betId = randomUUID();
-    await pool.query(
-      `insert into bets (id, bookmaker, odds, stake, potential_payout, status, source, placed_at, telegram_message_id)
-       values ($1, 'Telegram', 1, $2, $2, 'open', 'telegram', $3, $4)`,
-      [betId, TELEGRAM_ASSUMED_STAKE, postedAt, telegramMessageId]
-    );
-    let position = 0;
-    for (const leg of legs) {
-      await pool.query(
-        `insert into bet_legs (id, bet_id, position, match_id, manual_label, market, selection, line, odds, status)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, 1, 'open')`,
-        [randomUUID(), betId, position, leg.matchId, leg.manualLabel, leg.market, leg.selection, leg.lineValue]
-      );
-      position += 1;
-    }
-    stats.betsCreated += 1;
-  }
-
-  console.log(
-    `[telegram] bericht ${messageId}: ${stats.betsCreated} bet(s) aangemaakt, ${stats.alreadyProcessed} al bekend, ${stats.duplicateParlay} dubbele parlay overgeslagen`
-  );
-  return stats;
-}
-
-// Fictieve odds voor de winst/ROI-vergelijking — alleen opgehaald op
-// aanvraag (net als scores), niet automatisch per binnenkomend bericht, om
-// geen credits te verspillen. Alleen team_wint (h2h) en over_under (totals)
-// zijn markten die de Odds API ook echt aanbiedt; dubbelkans/btts/anders
-// tellen wel mee in de win-rate maar niet in de ROI. odds = 1 is de
-// sentinel-waarde voor "nog niet opgehaald" (zie ingestTelegramMessage).
-const ODDS_FETCHABLE_MARKETS = { team_wint: 'h2h', over_under: 'totals' };
-
-async function fetchReferenceOddsForLeg(leg) {
-  const marketKey = ODDS_FETCHABLE_MARKETS[leg.market];
-  if (!marketKey || !leg.match_id) return null;
-
-  let events;
-  try {
-    events = await oddsApiRequest(`/sports/${leg.sport_key}/odds/?regions=eu&markets=${marketKey}&eventIds=${leg.match_id}`);
-  } catch {
-    return null;
-  }
-  const event = events[0];
-  if (!event) return null;
-
-  const prices = [];
-  for (const bookmaker of event.bookmakers || []) {
-    const marketData = bookmaker.markets.find((m) => m.key === marketKey);
-    if (!marketData) continue;
-    if (leg.market === 'team_wint') {
-      const teamName = leg.selection === 'home' ? leg.home : leg.away;
-      const outcome = marketData.outcomes.find((o) => o.name === teamName);
-      if (outcome) prices.push(Number(outcome.price));
-    } else {
-      const wantedLine = Number(leg.line);
-      const outcome = marketData.outcomes.find(
-        (o) => o.name.toLowerCase() === leg.selection && Number(o.point) === wantedLine
-      );
-      if (outcome) prices.push(Number(outcome.price));
-    }
-  }
-  if (prices.length === 0) return null;
-  return prices.reduce((a, b) => a + b, 0) / prices.length;
-}
-
-app.post('/api/telegram/refresh-odds', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `select l.*, m.sport_key, m.home, m.away
-       from bet_legs l
-       join bets b on b.id = l.bet_id
-       join matches m on m.id = l.match_id
-       where b.source = 'telegram' and b.status = 'open' and l.odds = 1 and l.market = any($1)`,
-      [Object.keys(ODDS_FETCHABLE_MARKETS)]
-    );
-    let updated = 0;
-    const affectedBetIds = new Set();
-    for (const leg of rows) {
-      const odds = await fetchReferenceOddsForLeg(leg);
-      if (odds === null) continue;
-      await pool.query('update bet_legs set odds = $1 where id = $2', [odds, leg.id]);
-      affectedBetIds.add(leg.bet_id);
-      updated += 1;
-    }
-    for (const betId of affectedBetIds) {
-      await recomputeBetOdds(betId);
-    }
-    res.json({ checked: rows.length, updated, usage: await getLatestUsage() });
-  } catch (error) {
-    res.status(502).json({ error: error.message });
-  }
-});
-
-// Eenmalig oudere berichten ophalen - handig om de tracker met terugwerkende
-// kracht gelijk te laten lopen met de eigen bets, of om een gemiste periode
-// (bv. na downtime) alsnog te verwerken. Draait via de live listener-client
-// zodat er geen tweede sessie/verbinding nodig is.
-let activeTelegramClient = null;
-
-// Ankerdatum wordt bij elke druk op de knop opnieuw berekend (niet één keer
-// bij het opstarten van de server) - anders blijft een lang draaiend
-// container (restart: unless-stopped) hangen op de dag waarop hij ooit is
-// gestart, en haalt de backfill telkens dezelfde oude berichten opnieuw op
-// i.p.v. de berichten van vandaag. Standaard is dat "sinds lokale
-// middernacht (Amsterdam) vandaag" - expliciet op de Amsterdamse tijdzone
-// gerekend zodat dit klopt ongeacht in welke tijdzone de servermachine zelf
-// draait (de container draait in UTC). TELEGRAM_BACKFILL_SINCE blijft
-// beschikbaar als handmatige override voor een eenmalige inhaalslag verder
-// terug in de tijd (bv. na downtime).
-function startOfTodayAmsterdam() {
-  const { year, month, day } = amsterdamDateParts(new Date());
-  return new Date(amsterdamWallTimeToUtcMs(year, month, day, 0, 0));
-}
-
-app.post('/api/telegram/backfill', async (req, res) => {
-  if (!activeTelegramClient) {
-    res.status(503).json({ error: 'Telegram-listener is niet actief (TELEGRAM_* env vars ontbreken?)' });
-    return;
-  }
-  const since = req.body?.since
-    ? new Date(req.body.since)
-    : process.env.TELEGRAM_BACKFILL_SINCE
-      ? new Date(process.env.TELEGRAM_BACKFILL_SINCE)
-      : startOfTodayAmsterdam();
-  const startedAt = Date.now();
-  const totals = { betsCreated: 0, alreadyProcessed: 0, duplicateParlay: 0 };
-  try {
-    const processed = await backfillMessages(
-      activeTelegramClient,
-      process.env.TELEGRAM_GROUP_ID,
-      since,
-      async (message) => {
-        const stats = await ingestTelegramMessage(message);
-        totals.betsCreated += stats.betsCreated;
-        totals.alreadyProcessed += stats.alreadyProcessed;
-        totals.duplicateParlay += stats.duplicateParlay;
-      }
-    );
-    const durationMs = Date.now() - startedAt;
-    console.log(
-      `[telegram] backfill-endpoint klaar in ${durationMs}ms: ${processed} bericht(en), ${totals.betsCreated} nieuwe bet(s)`
-    );
-    res.json({ since: since.toISOString(), processed, durationMs, ...totals });
-  } catch (error) {
-    res.status(502).json({ error: error.message });
-  }
-});
-
-// ---------------------------------------------------------------------------
 // Bookmaker-overzicht — hoeveel geld staat er waar
 //
 // Het journaal per bookmaker wordt live afgeleid, niet apart opgeslagen:
@@ -1488,15 +1166,6 @@ function marketSelectionLabel(market, selectionKey) {
   return SELECTION_LABELS[market]?.[selectionKey] || selectionKey;
 }
 
-// Een net-binnengekomen telegram-leg heeft tijdelijk odds = 1 (sentinel, zie
-// TELEGRAM_ASSUMED_STAKE/ODDS_FETCHABLE_MARKETS) tot "Odds ophalen" is
-// gedraaid - zonder deze check telt zo'n leg als "0 yield" mee en verwatert
-// hij het gemiddelde onterecht. Per leg gecheckt (niet per bet): in dezelfde
-// combi kan de ene leg al geprijsd zijn en de andere nog niet.
-function isPricedLeg(leg, source) {
-  return source !== 'telegram' || Number(leg.odds) !== 1;
-}
-
 function computeMarketRow(g) {
   const totalLegs = g.singles + g.combi;
   return {
@@ -1510,8 +1179,8 @@ function computeMarketRow(g) {
   };
 }
 
-async function buildMarketOverview(source) {
-  const bets = await fetchBetsWithLegs('where source = $1', [source]);
+async function buildMarketOverview() {
+  const bets = await fetchBetsWithLegs("where source = 'manual'", []);
 
   const groups = new Map(); // market -> Map(selectionKey -> { singles, combi, won, pricedLegs, yieldSum, picks })
   function getGroup(market, selectionKey) {
@@ -1536,10 +1205,8 @@ async function buildMarketOverview(source) {
       if (isSingle) g.singles += 1;
       else g.combi += 1;
       if (leg.status === 'won') g.won += 1;
-      if (isPricedLeg(leg, source)) {
-        g.pricedLegs += 1;
-        g.yieldSum += leg.status === 'won' ? Number(leg.odds) - 1 : -1;
-      }
+      g.pricedLegs += 1;
+      g.yieldSum += leg.status === 'won' ? Number(leg.odds) - 1 : -1;
       g.picks.push({
         legId: leg.id,
         label: leg.match ? `${leg.match.home} – ${leg.match.away}` : leg.manualLabel || 'Handmatige selectie',
@@ -1584,9 +1251,8 @@ async function buildMarketOverview(source) {
 }
 
 app.get('/api/markets/overview', async (req, res) => {
-  const source = req.query.source === 'telegram' ? 'telegram' : 'manual';
   try {
-    res.json(await buildMarketOverview(source));
+    res.json(await buildMarketOverview());
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1600,12 +1266,12 @@ app.get('/api/markets/overview', async (req, res) => {
 // knop kan op elke dag van de week worden ingedrukt).
 // ---------------------------------------------------------------------------
 app.get('/api/reports/export', async (req, res) => {
-  const { period, source } = req.query;
+  const { period } = req.query;
   if (period !== 'day' && period !== 'week') {
     res.status(400).json({ error: "period moet 'day' of 'week' zijn" });
     return;
   }
-  const src = source === 'telegram' ? 'telegram' : 'manual';
+  const src = 'manual';
   try {
     const since = new Date();
     if (period === 'day') since.setHours(0, 0, 0, 0);
@@ -1625,7 +1291,7 @@ app.get('/api/reports/export', async (req, res) => {
 // export aan Claude hebt gegeven — bewaard zodat het in het dashboard zelf
 // te bekijken is, niet alleen als losse download op je eigen schijf.
 app.get('/api/reports/notes', async (req, res) => {
-  const source = req.query.source === 'telegram' ? 'telegram' : 'manual';
+  const source = 'manual';
   try {
     const { rows } = await pool.query(
       `select id, period, source, pick_count, generated_at, content, created_at
@@ -1649,7 +1315,7 @@ app.get('/api/reports/notes', async (req, res) => {
 });
 
 app.post('/api/reports/notes', async (req, res) => {
-  const { period, source, pickCount, generatedAt, content } = req.body;
+  const { period, pickCount, generatedAt, content } = req.body;
   if (period !== 'day' && period !== 'week') {
     res.status(400).json({ error: "period moet 'day' of 'week' zijn" });
     return;
@@ -1661,7 +1327,7 @@ app.post('/api/reports/notes', async (req, res) => {
   try {
     await ensureSchema();
     const id = randomUUID();
-    const src = source === 'telegram' ? 'telegram' : 'manual';
+    const src = 'manual';
     await pool.query(
       `insert into report_notes (id, period, source, pick_count, generated_at, content)
        values ($1, $2, $3, $4, coalesce($5, now()), $6)`,
@@ -1753,7 +1419,7 @@ function computeOutcome(market, selection, line, homeScore, awayScore) {
 // als het product van zijn eigen legs - een void leg telt daarbij als
 // quotering 1.00, dezelfde conventie als reevaluateBet hieronder gebruikt.
 // Nodig na elke correctie die een leg-odds verandert (handmatige fix op een
-// combi-leg, of de telegram "Odds ophalen"-refresh) zodat de bet-odds nooit
+// combi-leg) zodat de bet-odds nooit
 // stiekem achterblijft bij wat de legs zelf zeggen.
 async function recomputeBetOdds(betId) {
   const { rows: legRows } = await pool.query('select odds, status from bet_legs where bet_id = $1', [betId]);
@@ -1899,8 +1565,7 @@ app.get('/api/scores/usage', async (req, res) => {
 // Eén match kan meerdere open legs hebben (bv. een 1X2 én een over/onder op
 // hetzelfde duel, uit dezelfde of verschillende bets) - die verzamelen we
 // allemaal in picksByTsdbId i.p.v. alleen de eerst-gevondene te bewaren.
-// Alleen eigen bets (source='manual') - Telegram-picks zijn niet van jou en
-// horen dus niet als favoriet/pick op de live-tab te verschijnen.
+// Alleen eigen bets (source='manual').
 async function getFavoriteState() {
   const [legRows, overrideRows] = await Promise.all([
     pool.query(`
@@ -2108,7 +1773,7 @@ app.get('/api/live-link-suggestions', async (req, res) => {
       from bet_legs l
       join bets b on b.id = l.bet_id
       left join matches m on m.id = l.match_id
-      where b.status = 'open' and l.status = 'open'
+      where b.status = 'open' and l.status = 'open' and b.source = 'manual'
       order by coalesce(m.commence_time, l.kickoff_at) nulls last, l.position
     `);
     const items = new Map();
@@ -2231,13 +1896,6 @@ ensureSchema()
       console.log(`Bet Tracker API listening on port ${PORT}`);
     });
     startLiveScoresPoller();
-    startTelegramListener(ingestTelegramMessage)
-      .then((client) => {
-        activeTelegramClient = client;
-      })
-      .catch((error) => {
-        console.error('[telegram] kon niet starten:', error.message);
-      });
   })
   .catch((error) => {
     console.error('Kon databaseschema niet aanmaken:', error);

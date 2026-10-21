@@ -54,7 +54,6 @@ function downloadJson(data, filename) {
 }
 
 export default function ReportPanel() {
-  const [source, setSource] = useState('manual');
   const [loadingPeriod, setLoadingPeriod] = useState(null);
   const [error, setError] = useState(null);
   const [lastExport, setLastExport] = useState(null);
@@ -70,7 +69,7 @@ export default function ReportPanel() {
   function loadNotes() {
     setNotesLoading(true);
     api
-      .getReportNotes(source)
+      .getReportNotes()
       .then((data) => {
         const sorted = sortNotes(data);
         setNotes(sorted);
@@ -84,16 +83,16 @@ export default function ReportPanel() {
     setExpandedId(null);
     loadNotes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source]);
+  }, []);
 
   async function handleExport(period) {
     setError(null);
     setLoadingPeriod(period);
     try {
-      const data = await api.exportReport(period, source);
+      const data = await api.exportReport(period);
       const dateStr = data.generatedAt.slice(0, 10);
-      downloadJson(data, `bettracker-${period}rapport-${source}-${dateStr}.json`);
-      setLastExport({ period, source, pickCount: data.pickCount });
+      downloadJson(data, `bettracker-${period}rapport-manual-${dateStr}.json`);
+      setLastExport({ period, pickCount: data.pickCount });
       setPastePeriod(period);
       setShowPasteForm(true);
     } catch (err) {
@@ -111,7 +110,6 @@ export default function ReportPanel() {
     try {
       const note = await api.saveReportNote({
         period: pastePeriod,
-        source,
         pickCount: lastExport && lastExport.period === pastePeriod ? lastExport.pickCount : null,
         content: pasteContent,
       });
@@ -137,15 +135,6 @@ export default function ReportPanel() {
 
   return (
     <div>
-      <nav className="filters" style={{ marginBottom: 20 }}>
-        <button type="button" className={`filter-tab ${source === 'manual' ? 'is-active' : ''}`} onClick={() => setSource('manual')}>
-          Eigen bets
-        </button>
-        <button type="button" className={`filter-tab ${source === 'telegram' ? 'is-active' : ''}`} onClick={() => setSource('telegram')}>
-          Telegram
-        </button>
-      </nav>
-
       <div className="toolbar-filters" style={{ marginBottom: 20 }}>
         {PERIODS.map((p) => (
           <button
@@ -169,8 +158,7 @@ export default function ReportPanel() {
               'Geen afgehandelde bets in deze periode — er is een leeg bestand gedownload.'
             ) : (
               <>
-                Bestand met {lastExport.pickCount} picks gedownload ({lastExport.period === 'day' ? 'dag' : 'week'},{' '}
-                {lastExport.source === 'manual' ? 'eigen bets' : 'Telegram'}). Geef dit bestand aan Claude om er een
+                Bestand met {lastExport.pickCount} picks gedownload ({lastExport.period === 'day' ? 'dag' : 'week'}). Geef dit bestand aan Claude om er een
                 rapport van te laten schrijven, en plak het resultaat hieronder om het hier te bewaren.
               </>
             )}
@@ -218,7 +206,7 @@ export default function ReportPanel() {
         {notesLoading ? (
           <p className="hint-text">Laden…</p>
         ) : notes.length === 0 ? (
-          <p className="hint-text">Nog geen opgeslagen rapporten voor {source === 'manual' ? 'eigen bets' : 'Telegram'}.</p>
+          <p className="hint-text">Nog geen opgeslagen rapporten.</p>
         ) : (
           <div className="report-notes">
             {notes.map((note) => {
