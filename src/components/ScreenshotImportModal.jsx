@@ -282,8 +282,12 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
     );
   }
 
+  // Gaat de laatste selectie eruit, dan verdwijnt de hele bet uit de lijst.
   function removeLeg(index, legIndex) {
-    setDrafts((prev) => prev.map((d, i) => (i === index ? { ...d, legs: d.legs.filter((_, j) => j !== legIndex) } : d)));
+    setDrafts((prev) => {
+      const legs = prev[index].legs.filter((_, j) => j !== legIndex);
+      return legs.length > 0 ? prev.map((d, i) => (i === index ? { ...d, legs } : d)) : prev.filter((_, i) => i !== index);
+    });
   }
 
   // Valt een bet builder terug naar één onderdeel, dan wordt het weer een

@@ -503,10 +503,10 @@ function EditBetModal({ bet, onUpdate, onUpdateLeg, onLiveLinked, onClose }) {
                       <div className="ob-pick-info">
                         <span className="ob-pick-name">
                           {d.parts ? `Bet builder · ${d.parts.length} selecties` : describeBet(leg)}
-                          <EarlyPayoutToggle value={d.earlyPayout} onChange={(on) => setLeg(leg.id, { earlyPayout: on })} />
                         </span>
                         {group.manual && <ScoreBadge leg={leg} onLinked={onLiveLinked} />}
                       </div>
+                      <EarlyPayoutToggle value={d.earlyPayout} onChange={(on) => setLeg(leg.id, { earlyPayout: on })} />
                       {isCombi && (
                         <DecimalInput
                           className={`odds-edit-input${legChanges.find((c) => c.leg.id === leg.id)?.oddsInvalid ? ' is-invalid' : ''}`}

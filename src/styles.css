@@ -3958,22 +3958,43 @@ body {
 .ep-badge .inline-icon {
   stroke-width: 2.4;
 }
+/* De aan/uit-knop is geen pill maar een gewone knop zoals de prullenbak
+   bij de import; alleen de markering op de bet zelf is rond. */
 .ep-toggle {
   cursor: pointer;
   margin-left: 0;
   flex: none;
   align-self: center;
+  justify-content: center;
+  padding: 0 9px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  vertical-align: middle;
+}
+.ep-toggle .inline-icon {
+  width: 13px;
+  height: 13px;
 }
 .ep-toggle:not(.is-on) {
-  border-color: rgba(244, 242, 232, 0.22);
+  border-color: rgba(244, 242, 232, 0.15);
   background: transparent;
-  color: rgba(244, 242, 232, 0.4);
+  color: rgba(244, 242, 232, 0.55);
 }
 .ep-toggle:not(.is-on):hover {
   border-color: #2fb8a8;
   color: #7fe0d3;
 }
-.ob-pick-name .ep-toggle {
-  margin-left: 6px;
-  vertical-align: 1px;
+/* Even hoog als de knoppen ernaast: de ronde × in de selectielijst, de
+   uitslagknoppen in het bewerkscherm en de prullenbak bij de import. */
+.pick-row .ep-toggle {
+  height: 22px;
+}
+.pick-row .ep-toggle {
+  border-radius: 6px;
+}
+.eb-pick .ep-toggle {
+  height: 30px;
+}
+.import-leg .ep-toggle {
+  align-self: stretch;
 }
