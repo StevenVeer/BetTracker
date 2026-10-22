@@ -705,6 +705,7 @@ app.patch('/api/bet-legs/:id', async (req, res) => {
   }
 
   try {
+    const { rows: prevRows } = await pool.query('select status, odds from bet_legs where id = $1', [id]);
     const setClause = fields.map((field, index) => `${field} = $${index + 2}`).join(', ');
     const { rows } = await pool.query(
       `update bet_legs set ${setClause} where id = $1 returning bet_id`,
@@ -715,6 +716,7 @@ app.patch('/api/bet-legs/:id', async (req, res) => {
       res.status(404).json({ error: 'Selectie niet gevonden' });
       return;
     }
+    if (updates.status === 'open' && prevRows[0]?.status !== 'open') await reopenBet(betId, prevRows[0]);
     if (updates.status !== undefined) await reevaluateBet(betId);
     // Een leg is maar een deel van de combi-odds - na een correctie hier moet
     // de totale odds (en dus de mogelijke uitbetaling) van de hele bet weer
@@ -1527,6 +1529,27 @@ async function reevaluateBet(betId) {
     'update bets set status = $1, odds = $2, potential_payout = $3, settled_at = $5 where id = $4',
     ['won', effectiveOdds, payout, betId, await estimateSettledAt(betId)]
   );
+}
+
+// Een leg die terug naar open gaat (correctie van een te vroege of foute
+// uitslag) maakt een afgehandelde bet weer open - reevaluateBet hierna
+// settelt hem meteen opnieuw als de overige legs dat nog zeggen (bv. een
+// andere verloren leg). Een cash-out blijft staan: die is echt afgerekend.
+// Was de leg void bij een gewonnen bet, dan zijn zijn odds er destijds
+// uitgedeeld (zie reevaluateBet) - die komen er weer bij.
+async function reopenBet(betId, prevLeg) {
+  const { rows: betRows } = await pool.query('select * from bets where id = $1', [betId]);
+  const bet = betRows[0];
+  if (!bet || !['won', 'lost', 'void'].includes(bet.status)) return;
+  if (bet.status === 'won' && prevLeg?.status === 'void') {
+    const odds = Number(bet.odds) * Number(prevLeg.odds);
+    await pool.query(
+      'update bets set status = $1, settled_at = null, odds = $2, potential_payout = $3 where id = $4',
+      ['open', odds, odds * Number(bet.stake), betId]
+    );
+    return;
+  }
+  await pool.query('update bets set status = $1, settled_at = null where id = $2', ['open', betId]);
 }
 
 async function settleLegsForMatch(match) {
