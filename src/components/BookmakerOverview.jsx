@@ -25,6 +25,7 @@ const BOOKMAKER_SITES = {
   '711': 'https://www.711.nl/',
   Jacks: 'https://jacks.nl/sports#sports-hub/football',
   BetNation: 'https://www.betnation.nl',
+  'Holland Casino': 'https://www.hollandcasino.nl/en/sportsbook',
 };
 
 function bookmakerUrl(name) {
