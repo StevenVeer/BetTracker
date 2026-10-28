@@ -12,6 +12,7 @@ const ALIAS_WORDS = {
   gladbach: 'monchengladbach',
   atleti: 'atletico',
   inter: 'internazionale',
+  lyonnes: 'lyonnais', // ESPN noemt de Lyon-vrouwen "OL Lyonnes"
   saints: 'southampton',
 };
 

@@ -14,7 +14,9 @@ export const LEAGUES = [
   { key: 'soccer_uefa_europa_league', name: 'Europa League', country: 'Europe', tier: 'top' },
 
   { key: 'soccer_uefa_europa_conference_league', name: 'Conference League', country: 'Europe', tier: 'other' },
+  { key: 'soccer_uefa_champs_league_women', name: 'Champions League (vrouwen)', country: 'Europe', tier: 'other' },
   { key: 'soccer_portugal_primeira_liga', name: 'Primeira Liga', country: 'Portugal', tier: 'other' },
+  { key: 'soccer_portugal_taca', name: 'Taça de Portugal', country: 'Portugal', tier: 'other', liveOnly: true },
   { key: 'soccer_efl_champ', name: 'Championship', country: 'England', tier: 'other' },
   { key: 'soccer_fa_cup', name: 'FA Cup', country: 'England', tier: 'other' },
   { key: 'soccer_england_efl_cup', name: 'EFL Cup', country: 'England', tier: 'other' },
