@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BetTracker favorieten</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <header>
+      <div class="filters" role="tablist">
+        <button class="filter-tab" type="button" role="tab" data-tab="favorites">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l2.9 6.3 6.9.7-5.2 4.7 1.6 6.8L12 17.6 5.8 21l1.6-6.8-5.2-4.7 6.9-.7z" /></svg>
+          Favorieten
+          <span class="count" id="count-favorites">0</span>
+        </button>
+        <button class="filter-tab" type="button" role="tab" data-tab="bets">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4z" /><path d="M15 5v2M15 11v2M15 17v2" /></svg>
+          Bets
+          <span class="count" id="count-bets">0</span>
+        </button>
+      </div>
+      <button id="refresh" type="button" title="Vernieuwen" aria-label="Vernieuwen">&#x21bb;</button>
+    </header>
+    <div id="error" class="error" hidden></div>
+    <main id="list"></main>
+    <footer>
+      <button id="open-app" type="button">Open BetTracker</button>
+    </footer>
+    <script src="panel.js"></script>
+  </body>
+</html>

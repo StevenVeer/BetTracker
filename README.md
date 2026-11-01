@@ -59,7 +59,8 @@ Zie `.env.example`.
 | `POSTGRES_PASSWORD` | Database (verplicht) |
 | `ODDS_API_KEY` | Wedstrijden en settlement via The Odds API (verplicht) |
 | `ANTHROPIC_API_KEY` | Screenshot- en pagina-import (optioneel; model overschrijfbaar met `ANTHROPIC_MODEL`) |
-| `LIVE_SCORES_POLL_MS` | Poll-interval live scores, standaard 20000 ms |
+| `LIVE_SCORES_POLL_MS` | Interval volledige live-scores-poll (gisteren, vandaag, morgen), standaard 60000 ms |
+| `LIVE_SCORES_LIVE_POLL_MS` | Interval tussendoor voor alleen de dag(en) met een lopende wedstrijd, standaard 10000 ms |
 
 ## Browserextensie installeren
 
@@ -68,6 +69,18 @@ Zie `.env.example`.
 3. Zet het groene B-icoon vast in de werkbalk.
 
 Gebruik: open op de site van je bookmaker "Mijn weddenschappen" en klik op het icoon (of druk Alt+Shift+B). De app opent (of hergebruikt een open tab op `localhost:6070`) met de gevonden bets ter controle. Selecteer je eerst een stuk tekst, dan wordt alleen dat meegestuurd. Leest de tekst niets uit, dan valt de app automatisch terug op een screenshot van het zichtbare deel. Met **Via screenshot uitlezen** kun je dat ook zelf doen. Na wijzigingen in `extension/` klik je op het herlaad-icoon bij de extensie in `chrome://extensions`.
+
+### Favorieten-zijpaneel
+
+Een tweede, losse extensie in `sidepanel/`: een zijpaneel rechts in de browser met twee tabs. Ververst elke 10 seconden zolang het paneel open is.
+
+- **Favorieten** – alleen je favoriete wedstrijden (open bet erop of handmatige ster), gegroepeerd in live, komend en afgelopen, met score, minuut en je picks.
+- **Bets** – je open bets met totale inzet, mogelijke uitbetaling en aantal live bets bovenaan; per bet de legs met status (gewonnen, live met stand en minuut, of aftrap), een voortgangsbalk bij combi's en eventueel het cash-out bedrag.
+
+1. Kies in `chrome://extensions` **Uitgepakte extensie laden** en selecteer de map `sidepanel/`.
+2. Zet het icoon vast en klik erop (of druk Alt+Shift+F) om het paneel te openen.
+
+Met de ster haal je een wedstrijd uit je favorieten; een klik op een wedstrijd opent BetTracker. Werkt in Chrome, Edge en Brave (side panel API).
 
 ## Projectstructuur
 

@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "BetTracker favorieten",
+  "version": "1.0.0",
+  "description": "Zijpaneel met je favoriete wedstrijden en live scores uit je lokale BetTracker.",
+  "permissions": [
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "http://localhost:6070/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "action": {
+    "default_title": "Open BetTracker favorieten",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png"
+    }
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+F"
+      },
+      "description": "Open BetTracker favorieten"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}

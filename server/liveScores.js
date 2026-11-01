@@ -10,7 +10,12 @@ import { teamNameSimilarity, teamNamesMatch } from './teamMatch.js';
 // 'all' levert alle voetbalwedstrijden van een dag in één call; zonder limit
 // kapt ESPN af op 100 events, en op een drukke dag zijn dat er ruim 400.
 const ESPN_SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard';
-const POLL_MS = Number(process.env.LIVE_SCORES_POLL_MS || 20000);
+// Twee tempo's: elke POLL_MS alle drie de dagen (gisteren/vandaag/morgen),
+// en daartussen elke LIVE_POLL_MS alleen de dag(en) waarop op dat moment
+// iets live is. Zo ververst een lopende wedstrijd snel zonder dat we ESPN de
+// hele dag met drie grote requests per paar seconden bestoken.
+const POLL_MS = Number(process.env.LIVE_SCORES_POLL_MS || 60000);
+const LIVE_POLL_MS = Number(process.env.LIVE_SCORES_LIVE_POLL_MS || 10000);
 // Bij een 429 (of ander teken van blokkade) pauzeren we een paar cycli i.p.v.
 // gewoon door te blijven proberen, zodat we het niet erger maken.
 const BACKOFF_MS = 2 * 60 * 1000;
@@ -250,12 +255,22 @@ function yyyymmdd(date) {
 // lopen (of net afgelopen zijn) terwijl het al een nieuwe UTC-dag is, dus we
 // halen gisteren én vandaag op - plus morgen, zodat je een pick voor een
 // wedstrijd van morgen al vooraf kunt koppelen.
-async function fetchScoreboardEvents() {
+// Laatste ESPN-response per dag, zodat een snelle poll van alleen de live
+// dag(en) samen met de rest van de vorige volledige poll verwerkt kan worden
+// (de "uit de response gevallen = FT"-logica in poll() gaat uit van alle dagen).
+const eventsByDay = new Map();
+let lastFullPollAt = 0;
+let pollInFlight = false;
+
+function scoreboardDays() {
   const now = Date.now();
   const DAY_MS = 24 * 60 * 60 * 1000;
-  const days = [yyyymmdd(new Date(now - DAY_MS)), yyyymmdd(new Date(now)), yyyymmdd(new Date(now + DAY_MS))];
+  return [yyyymmdd(new Date(now - DAY_MS)), yyyymmdd(new Date(now)), yyyymmdd(new Date(now + DAY_MS))];
+}
+
+async function fetchScoreboardDays(days) {
   const responses = await Promise.all(days.map((day) => fetch(`${ESPN_SCOREBOARD_URL}?dates=${day}&limit=500`)));
-  const events = [];
+  const results = [];
   for (const response of responses) {
     if (response.status === 429 || response.status === 403) {
       pausedUntil = Date.now() + BACKOFF_MS;
@@ -263,15 +278,36 @@ async function fetchScoreboardEvents() {
     }
     if (!response.ok) throw new Error(`ESPN gaf status ${response.status}`);
     const data = await response.json();
-    events.push(...(data.events || []));
+    results.push(data.events || []);
   }
-  return events;
+  days.forEach((day, i) => eventsByDay.set(day, results[i]));
+}
+
+// Volledige poll als die aan de beurt is, anders alleen de dagen met een
+// lopende wedstrijd (ESPN's eigen state 'in'). Geeft null als er niets op te
+// halen viel - dan blijft de cache zoals hij is.
+async function fetchScoreboardEvents() {
+  const days = scoreboardDays();
+  for (const day of eventsByDay.keys()) {
+    if (!days.includes(day)) eventsByDay.delete(day);
+  }
+  if (Date.now() - lastFullPollAt >= POLL_MS) {
+    await fetchScoreboardDays(days);
+    lastFullPollAt = Date.now();
+  } else {
+    const liveDays = days.filter((day) => (eventsByDay.get(day) || []).some((e) => e.status?.type?.state === 'in'));
+    if (liveDays.length === 0) return null;
+    await fetchScoreboardDays(liveDays);
+  }
+  return days.flatMap((day) => eventsByDay.get(day) || []);
 }
 
 async function poll() {
-  if (Date.now() < pausedUntil) return;
+  if (Date.now() < pausedUntil || pollInFlight) return;
+  pollInFlight = true;
   try {
     const events = await fetchScoreboardEvents();
+    if (!events) return;
     const normalized = events.map((event) => normalizeMatch(event, { includeScheduled: true })).filter(Boolean);
     const incoming = normalized.filter((m) => !m.scheduled);
     upcomingStore = new Map(normalized.filter((m) => m.scheduled && !matchStore.has(m.id)).map((m) => [m.id, m]));
@@ -297,6 +333,8 @@ async function poll() {
     // dat een enkele mislukte poll de weergave meteen leegtrekt.
     pruneExpired();
     cache = { matches: buildSortedMatches(), updatedAt: cache.updatedAt, error: error.message };
+  } finally {
+    pollInFlight = false;
   }
 }
 
@@ -414,5 +452,7 @@ export function getLiveScores() {
 
 export function startLiveScoresPoller() {
   poll();
-  setInterval(poll, POLL_MS);
+  // Tikt op het snelle tempo; poll() bepaalt zelf of het een volledige of
+  // een live-only ronde wordt (of helemaal niets als er niets live is).
+  setInterval(poll, Math.min(POLL_MS, LIVE_POLL_MS));
 }

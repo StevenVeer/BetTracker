@@ -1,0 +1,550 @@
+/* Zelfde thema als de app (src/styles.css): pitch/gold/chalk, Oswald en
+   Space Mono, de favorietenkaarten uit het live-overzicht. */
+:root {
+  --pitch: #0e3b2e;
+  --pitch-dark: #082820;
+  --chalk: #f4f2e8;
+  --gold: #e8b23d;
+  --gold-soft: #f2c463;
+  --red: #e14b4b;
+  --ink: #0a1210;
+  --bank-soft: #8fc0e3;
+  --mono: 'Space Mono', ui-monospace, SFMono-Regular, monospace;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold-soft) var(--pitch-dark);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  /* Zelfde zachte goudlijn als onder de header - scheidt het paneel van de pagina. */
+  border-left: 1px solid rgba(232, 178, 61, 0.45);
+  background: radial-gradient(circle 700px at 50% -100px, #163f30, #081714 65%) fixed;
+  font-family: 'Oswald', sans-serif;
+  color: var(--chalk);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  background: rgba(8, 23, 20, 0.92);
+  border-bottom: 1px solid rgba(232, 178, 61, 0.25);
+}
+
+/* Tabs: de filter-tabs uit de app (.filters/.filter-tab), met icoon en teller
+   op één middenlijn. */
+.filters {
+  flex: 1;
+  display: flex;
+  gap: 4px;
+  background: rgba(10, 18, 16, 0.55);
+  border: 1px solid rgba(232, 178, 61, 0.25);
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.filter-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(244, 242, 232, 0.55);
+}
+
+.filter-tab:hover {
+  color: var(--chalk);
+}
+
+.filter-tab.is-active {
+  background: rgba(232, 178, 61, 0.16);
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.filter-tab svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+  background: rgba(244, 242, 232, 0.12);
+  color: rgba(244, 242, 232, 0.7);
+}
+
+.filter-tab.is-active .count {
+  background: var(--gold-soft);
+  color: var(--ink);
+}
+
+#refresh {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 178, 61, 0.4);
+  background: transparent;
+  color: var(--gold-soft);
+  font-size: 14px;
+  line-height: 1;
+}
+
+#refresh:hover {
+  background: rgba(232, 178, 61, 0.14);
+}
+
+main {
+  flex: 1;
+  padding: 4px 12px 14px;
+}
+
+.group-title {
+  margin: 14px 2px 8px;
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.group-title.muted {
+  color: rgba(244, 242, 232, 0.5);
+}
+
+.fav-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-bottom: 10px;
+  background: rgba(232, 178, 61, 0.06);
+  border: 1px solid rgba(232, 178, 61, 0.3);
+  border-radius: 10px;
+  padding: 12px 13px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.fav-card:hover {
+  border-color: rgba(232, 178, 61, 0.6);
+  background: rgba(232, 178, 61, 0.1);
+}
+
+.fav-card.is-done {
+  background: rgba(10, 18, 16, 0.4);
+  border-color: rgba(244, 242, 232, 0.1);
+}
+
+.fav-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.league {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(244, 242, 232, 0.5);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: rgba(244, 242, 232, 0.5);
+  background: rgba(244, 242, 232, 0.08);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.badge.is-live {
+  color: var(--ink);
+  background: var(--gold);
+  font-weight: 700;
+}
+
+.live-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink);
+  animation: pulse 1.4s infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.star-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--gold);
+  background: var(--gold);
+  color: var(--ink);
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.star-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.star-btn:hover {
+  background: var(--gold-soft);
+}
+
+.star-btn:active {
+  transform: scale(0.92);
+}
+
+.fav-card-table {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fav-card-table-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.team {
+  color: rgba(244, 242, 232, 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.pick-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(244, 242, 232, 0.1);
+}
+
+.pick-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: rgba(244, 242, 232, 0.8);
+}
+
+.pick-line .market {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--bank-soft);
+  border-radius: 5px;
+  padding: 2px 6px;
+}
+
+.pick-line .odds {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: rgba(244, 242, 232, 0.5);
+}
+
+/* Samenvatting boven de open bets - zelfde tegels als .summary in de app. */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 12px 0 0;
+}
+
+.summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  background: rgba(10, 18, 16, 0.55);
+  border-left: 3px solid var(--gold);
+  padding: 7px 9px;
+}
+
+.summary .label {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(244, 242, 232, 0.5);
+}
+
+.summary .value {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bet-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+  background: rgba(232, 178, 61, 0.06);
+  border: 1px solid rgba(232, 178, 61, 0.3);
+  border-radius: 10px;
+  padding: 11px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.bet-card:hover {
+  border-color: rgba(232, 178, 61, 0.6);
+  background: rgba(232, 178, 61, 0.1);
+}
+
+.bet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(244, 242, 232, 0.5);
+}
+
+.leg {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.leg-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-size: 10px;
+  line-height: 1;
+  border: 1px solid rgba(244, 242, 232, 0.35);
+}
+
+.leg-icon.won {
+  border-color: #269c5b;
+  background: #269c5b;
+  color: var(--ink);
+}
+
+.leg-icon.lost {
+  border-color: #be383d;
+  background: #be383d;
+  color: var(--chalk);
+}
+
+.leg-icon.void {
+  border-style: dashed;
+}
+
+.leg-icon.live {
+  border-color: var(--gold);
+  background: var(--gold);
+}
+
+.leg-icon.live .live-dot {
+  width: 6px;
+  height: 6px;
+}
+
+.leg-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.leg-pick {
+  font-size: 12.5px;
+  color: rgba(244, 242, 232, 0.9);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leg.is-done .leg-pick {
+  color: rgba(244, 242, 232, 0.55);
+}
+
+.leg-match {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: rgba(244, 242, 232, 0.5);
+}
+
+.leg-match span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leg-state {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+
+.leg-state.is-live {
+  color: var(--gold);
+}
+
+.progress {
+  height: 3px;
+  margin-top: 2px;
+  border-radius: 2px;
+  background: rgba(244, 242, 232, 0.1);
+  overflow: hidden;
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  background: #269c5b;
+}
+
+.bet-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 7px;
+  border-top: 1px dashed rgba(244, 242, 232, 0.1);
+  font-size: 12px;
+  color: rgba(244, 242, 232, 0.7);
+}
+
+.bet-foot .mono {
+  font-family: var(--mono);
+  color: var(--gold);
+}
+
+.bet-cashout {
+  font-size: 11px;
+  color: rgba(244, 242, 232, 0.55);
+}
+
+.bet-cashout .mono {
+  font-family: var(--mono);
+  color: var(--bank-soft);
+}
+
+.empty,
+.error {
+  margin: 16px 2px;
+  font-size: 13px;
+  color: rgba(244, 242, 232, 0.5);
+}
+
+.error {
+  color: var(--red);
+}
+
+footer {
+  padding: 12px 14px;
+  border-top: 1px solid rgba(232, 178, 61, 0.25);
+}
+
+#open-app {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 178, 61, 0.4);
+  background: transparent;
+  color: var(--gold-soft);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+#open-app:hover {
+  background: rgba(232, 178, 61, 0.14);
+}
