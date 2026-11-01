@@ -127,15 +127,134 @@ function badge(m) {
   return el('span', 'badge', stateLabel(m));
 }
 
-function teamRow(team, score) {
+// --- Acties (doelpunten, rode kaarten) ---------------------------------------
+// De server levert per wedstrijd m.events (zie normalizeEvents() in
+// server/liveScores.js). Hier onthouden we wanneer we elke actie voor het
+// eerst zagen: de nieuwste krijgt 2 minuten een banner, eerdere recente
+// acties een chip. Bij het openen van het paneel tellen alleen acties die
+// volgens de wedstrijdminuut nog vers zijn, zodat je niet het hele
+// wedstrijdverloop als "nieuw" ziet.
+
+const EVENT_WINDOW_MS = 2 * 60_000;
+const EVENT_WINDOW_MINUTES = 2;
+const SEEN_KEY = 'bettracker-sidepanel-seen';
+const SEEN_TTL_MS = 6 * 60 * 60_000;
+
+const seenAt = new Map();
+try {
+  const stored = JSON.parse(localStorage.getItem(SEEN_KEY) || '{}');
+  for (const [key, at] of Object.entries(stored)) {
+    if (Date.now() - at < SEEN_TTL_MS || at === 0) seenAt.set(key, at);
+  }
+} catch {
+  // Geen of kapotte opslag - dan beginnen we gewoon leeg.
+}
+
+function saveSeen() {
+  const cutoff = Date.now() - SEEN_TTL_MS;
+  for (const [key, at] of seenAt) {
+    if (at !== 0 && at < cutoff) seenAt.delete(key);
+  }
+  try {
+    localStorage.setItem(SEEN_KEY, JSON.stringify(Object.fromEntries(seenAt)));
+  } catch {
+    // Onthouden is een gemak, geen vereiste.
+  }
+}
+
+// "45+3" -> 48, "67" -> 67.
+function minuteValue(minute) {
+  if (!minute) return null;
+  const [base, extra] = String(minute).split('+').map(Number);
+  return Number.isFinite(base) ? base + (Number.isFinite(extra) ? extra : 0) : null;
+}
+
+// Geeft de recente acties (nieuwste eerst) en of er deze render een nieuwe bij
+// kwam - dat laatste stuurt het oplichten van de kaart.
+function trackEvents(m) {
+  const now = Date.now();
+  const current = minuteValue(m.minute);
+  let fresh = false;
+  for (const event of m.events || []) {
+    const key = `${m.id}|${event.key}`;
+    if (seenAt.has(key)) continue;
+    const at = minuteValue(event.minute);
+    const recent = LIVE_STATUSES.has(m.status) && current !== null && at !== null && current - at <= EVENT_WINDOW_MINUTES;
+    // 0 = al oud toen we hem voor het eerst zagen, nooit een banner.
+    seenAt.set(key, recent ? now : 0);
+    if (recent) fresh = true;
+  }
+  const recent = (m.events || [])
+    .map((event, index) => ({ event, index, at: seenAt.get(`${m.id}|${event.key}`) || 0 }))
+    .filter((x) => x.at && now - x.at < EVENT_WINDOW_MS)
+    .sort((a, b) => b.at - a.at || b.index - a.index)
+    .map((x) => x.event);
+  return { recent, fresh };
+}
+
+const BALL_PATH =
+  'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 4.2 3.4 2.5-1.3 4h-4.2l-1.3-4zM4.6 9.6l2.4.8 1.3 4-1.5 2.1-2.4-.1a8 8 0 0 1 .2-6.8zm14.8 0a8 8 0 0 1 .2 6.8l-2.4.1-1.5-2.1 1.3-4zM9.4 17.1h5.2l1.2 2.2a8 8 0 0 1-7.6 0z';
+
+function ballIcon() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'currentColor');
+  svg.setAttribute('fill-rule', 'evenodd');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', BALL_PATH);
+  svg.append(path);
+  return svg;
+}
+
+function eventIcon(event) {
+  return event.type === 'goal' ? ballIcon() : el('span', 'red-card');
+}
+
+function eventBanner(event, m) {
+  const team = event.side === 'home' ? m.home : event.side === 'away' ? m.away : '';
+  const banner = el('div', `event-banner${event.type === 'red' ? ' is-red' : ''}`);
+  let text;
+  if (event.type === 'goal') {
+    const suffix = event.ownGoal ? ' (e.d.)' : event.penalty ? ' (pen.)' : '';
+    text = `Goal · ${event.player || team}${suffix} ${event.minute ?? ''}'`;
+  } else {
+    text = `Rode kaart · ${team}${event.player ? ` (${event.player})` : ''} ${event.minute ?? ''}'`;
+  }
+  const label = el('span', 'event-text', text);
+  label.title = text;
+  banner.append(eventIcon(event), label);
+  // De nieuwste goal is altijd de laatste scorewijziging, dus de huidige stand klopt.
+  if (event.type === 'goal') banner.append(el('span', 'event-score', `${m.homeScore ?? '–'}-${m.awayScore ?? '–'}`));
+  return banner;
+}
+
+function eventChips(events) {
+  const chips = el('div', 'event-chips');
+  for (const event of events) {
+    const chip = el('span', `event-chip${event.type === 'red' ? ' is-red' : ''}`);
+    chip.append(eventIcon(event), document.createTextNode(`${event.minute ?? ''}'`));
+    chip.title = event.player || '';
+    chips.append(chip);
+  }
+  return chips;
+}
+
+// Laatst getoonde stand per wedstrijd, om een gewijzigde score te laten opveren.
+const lastScores = new Map();
+
+function teamRow(team, score, { redCards = 0, bump = false } = {}) {
   const row = el('div', 'fav-card-table-row');
-  row.append(el('span', 'team', team), el('span', 'score', score));
+  const name = el('span', 'team', team);
+  // Een rode kaart blijft de rest van de wedstrijd als markering staan.
+  for (let i = 0; i < redCards; i++) name.append(el('span', 'red-card'));
+  row.append(name, el('span', `score${bump ? ' bump' : ''}`, score));
   return row;
 }
 
 function renderMatch(m) {
   const done = DONE_STATUSES.has(m.status);
-  const card = el('div', `fav-card${done ? ' is-done' : ''}`);
+  const { recent, fresh } = trackEvents(m);
+  const card = el('div', `fav-card${done ? ' is-done' : ''}${fresh ? ' flash' : ''}`);
   card.title = 'Open BetTracker';
   card.addEventListener('click', openApp);
 
@@ -153,11 +272,25 @@ function renderMatch(m) {
   top.append(el('span', 'league', m.league || ''), badge(m), star);
   card.append(top);
 
+  if (recent.length > 0) {
+    card.append(eventBanner(recent[0], m));
+    if (recent.length > 1) card.append(eventChips(recent.slice(1)));
+  }
+
   const started = m.status !== 'NS';
+  const previous = lastScores.get(m.id);
+  lastScores.set(m.id, { home: m.homeScore, away: m.awayScore });
+  const reds = (side) => (m.events || []).filter((e) => e.type === 'red' && e.side === side).length;
   const table = el('div', 'fav-card-table');
   table.append(
-    teamRow(m.home, started ? String(m.homeScore ?? '–') : ''),
-    teamRow(m.away, started ? String(m.awayScore ?? '–') : '')
+    teamRow(m.home, started ? String(m.homeScore ?? '–') : '', {
+      redCards: reds('home'),
+      bump: Boolean(previous) && previous.home !== m.homeScore,
+    }),
+    teamRow(m.away, started ? String(m.awayScore ?? '–') : '', {
+      redCards: reds('away'),
+      bump: Boolean(previous) && previous.away !== m.awayScore,
+    })
   );
   card.append(table);
 
@@ -348,6 +481,7 @@ function render() {
   listEl.replaceChildren();
   if (activeTab === 'bets') renderBets(state.bets, state.overlay);
   else renderFavorites(state.matches);
+  saveSeen();
 }
 
 function showError(message) {

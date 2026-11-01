@@ -148,6 +148,36 @@ function normalizeMinute(displayClock) {
   return cleaned || null;
 }
 
+// Doelpunten en rode kaarten uit competition.details (zit gewoon in de
+// scoreboard-response, dus geen extra request). Gele kaarten laten we weg -
+// die zijn te frequent om als "actie" te melden. De key is stabiel over polls
+// heen, zodat het zijpaneel nieuwe acties kan herkennen.
+function normalizeEvents(competition, home, away) {
+  const sideByTeamId = new Map([
+    [String(home.team?.id), 'home'],
+    [String(away.team?.id), 'away'],
+  ]);
+  const events = [];
+  for (const detail of competition?.details || []) {
+    if (detail.shootout) continue;
+    const type = detail.scoringPlay ? 'goal' : detail.redCard ? 'red' : null;
+    if (!type) continue;
+    const side = sideByTeamId.get(String(detail.team?.id)) || null;
+    const minute = normalizeMinute(detail.clock?.displayValue);
+    const player = detail.athletesInvolved?.[0];
+    events.push({
+      key: `${type}:${side}:${minute}:${player?.id || ''}`,
+      type,
+      side,
+      minute,
+      player: player?.shortName || player?.displayName || null,
+      ownGoal: Boolean(detail.ownGoal),
+      penalty: Boolean(detail.penaltyKick),
+    });
+  }
+  return events;
+}
+
 function normalizeMatch(event, { includeScheduled = false } = {}) {
   const leagueId = (event.uid || '').match(/~l:(\d+)/)?.[1];
   const info = LEAGUE_BY_ESPN_ID.get(leagueId);
@@ -173,6 +203,7 @@ function normalizeMatch(event, { includeScheduled = false } = {}) {
     status: toStatusCode(status), // bv. '1H', 'HT', '2H', 'FT'
     minute: normalizeMinute(status?.displayClock),
     kickoff: event.date || null, // ISO met Z-suffix, echt UTC
+    events: scheduled ? [] : normalizeEvents(competition, home, away),
     ...(scheduled ? { scheduled: true } : {}),
   };
 }

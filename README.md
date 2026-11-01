@@ -74,7 +74,7 @@ Gebruik: open op de site van je bookmaker "Mijn weddenschappen" en klik op het i
 
 Een tweede, losse extensie in `sidepanel/`: een zijpaneel rechts in de browser met twee tabs. Ververst elke 10 seconden zolang het paneel open is.
 
-- **Favorieten** – alleen je favoriete wedstrijden (open bet erop of handmatige ster), gegroepeerd in live, komend en afgelopen, met score, minuut en je picks.
+- **Favorieten** – alleen je favoriete wedstrijden (open bet erop of handmatige ster), gegroepeerd in live, komend en afgelopen, met score, minuut en je picks. Bij een doelpunt of rode kaart licht de kaart op en verschijnt 2 minuten een banner met de actie (eerdere recente acties als kleine chips); een rode kaart blijft als rood blokje naast de teamnaam staan. Gele kaarten worden niet gemeld.
 - **Bets** – je open bets met totale inzet, mogelijke uitbetaling en aantal live bets bovenaan; per bet de legs met status (gewonnen, live met stand en minuut, of aftrap), een voortgangsbalk bij combi's en eventueel het cash-out bedrag.
 
 1. Kies in `chrome://extensions` **Uitgepakte extensie laden** en selecteer de map `sidepanel/`.
