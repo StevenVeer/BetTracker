@@ -1,6 +1,7 @@
 // Zijpaneel met twee tabs: je favoriete wedstrijden uit /api/live-scores
 // (favoriet = open bet erop of handmatige ster, zie getFavoriteState() in
-// server/index.js) en je open bets met live-stand per leg (overlay uit
+// server/index.js), met daaronder de aankomende wedstrijden van vandaag en
+// morgen per competitie, en je open bets met live-stand per leg (overlay uit
 // /api/live-scores/open-matches). Ververst elke 10 seconden. Geen build-stap, dus de
 // helpers uit src/ (markets.js, liveShared.jsx) staan hier in afgeslankte vorm.
 
@@ -76,6 +77,14 @@ function kickoffLabel(iso) {
   return `${date.toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' })} ${time}`;
 }
 
+// Korte variant voor de compacte rijen: alleen de tijd vandaag, anders "ma 18:30".
+function shortKickoff(iso) {
+  const date = new Date(iso);
+  const time = date.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+  if (date.toDateString() === new Date().toDateString()) return time;
+  return `${date.toLocaleDateString('nl-NL', { weekday: 'short' })} ${time}`;
+}
+
 function stateLabel(m) {
   if (m.status === 'NS') return null;
   if (STATUS_LABELS[m.status]) return STATUS_LABELS[m.status];
@@ -88,6 +97,16 @@ async function unfavorite(match) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   } catch (err) {
     showError(`Favoriet verwijderen mislukt: ${err.message}`);
+  }
+  load();
+}
+
+async function favorite(match) {
+  try {
+    const res = await fetch(`${APP_URL}/api/favorites/${encodeURIComponent(match.id)}`, { method: 'POST' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch (err) {
+    showError(`Favoriet toevoegen mislukt: ${err.message}`);
   }
   load();
 }
@@ -107,10 +126,17 @@ async function openApp() {
 
 const STAR_PATH = 'M12 2.5l2.9 6.3 6.9.7-5.2 4.7 1.6 6.8L12 17.6 5.8 21l1.6-6.8-5.2-4.7 6.9-.7z';
 
-function starIcon() {
+function starIcon({ outline = false } = {}) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('fill', 'currentColor');
+  if (outline) {
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linejoin', 'round');
+  } else {
+    svg.setAttribute('fill', 'currentColor');
+  }
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   path.setAttribute('d', STAR_PATH);
   svg.append(path);
@@ -294,37 +320,201 @@ function renderMatch(m) {
   );
   card.append(table);
 
-  if (m.picks && m.picks.length > 0) {
-    const picks = el('div', 'pick-lines');
-    for (const p of m.picks) {
-      const row = el('div', 'pick-line');
-      row.append(el('span', 'market', MARKET_ABBR[p.market] || p.market), document.createTextNode(pickLabel(p, m)));
-      if (Number.isFinite(p.odds)) row.append(el('span', 'odds', p.odds.toFixed(2)));
-      picks.append(row);
-    }
-    card.append(picks);
-  }
+  if (m.picks && m.picks.length > 0) card.append(pickLines(m.picks, m));
   return card;
 }
 
-function renderFavorites(matches) {
-  const favorites = matches.filter((m) => m.favorite);
-  const byKickoff = (a, b) => new Date(a.kickoff) - new Date(b.kickoff);
-  const groups = [
-    { title: 'Live', className: 'live', items: favorites.filter((m) => LIVE_STATUSES.has(m.status)).sort(byKickoff) },
-    { title: 'Komend', items: favorites.filter((m) => m.status === 'NS').sort(byKickoff) },
-    { title: 'Afgelopen', className: 'muted', items: favorites.filter((m) => DONE_STATUSES.has(m.status)).sort((a, b) => byKickoff(b, a)) },
-  ];
+function pickLines(picks, match) {
+  const lines = el('div', 'pick-lines');
+  for (const p of picks) {
+    const row = el('div', 'pick-line');
+    row.append(el('span', 'market', MARKET_ABBR[p.market] || p.market), document.createTextNode(pickLabel(p, match)));
+    if (Number.isFinite(Number(p.odds))) row.append(el('span', 'odds', Number(p.odds).toFixed(2)));
+    lines.append(row);
+  }
+  return lines;
+}
 
-  if (favorites.length === 0) {
-    listEl.append(el('div', 'empty', 'Geen favorieten. Zet een ster op een wedstrijd in BetTracker of plaats een bet.'));
-    return;
+// ESPN kent alleen gisteren t/m morgen. Een open bet op een wedstrijd verder
+// weg (of een die niet te koppelen is) tonen we daarom vanuit de bet zelf,
+// gegroepeerd per wedstrijd. Legs die al als pick op een ESPN-wedstrijd
+// staan slaan we over, zodat niets dubbel verschijnt.
+function upcomingBetMatches(bets, knownLegIds) {
+  const now = Date.now();
+  const byMatch = new Map();
+  for (const bet of bets) {
+    for (const leg of bet.legs || []) {
+      const kickoff = legKickoff(leg);
+      if (leg.status !== 'open' || knownLegIds.has(leg.id) || !kickoff || new Date(kickoff).getTime() <= now) continue;
+      const key = leg.match?.id || `${legLabel(leg)}|${kickoff}`;
+      if (!byMatch.has(key)) {
+        byMatch.set(key, {
+          league: leg.match?.competition || '',
+          home: leg.match?.home || legLabel(leg),
+          away: leg.match?.away || '',
+          kickoff,
+          picks: [],
+        });
+      }
+      byMatch.get(key).picks.push({ ...leg, bookmaker: bet.bookmaker });
+    }
+  }
+  return [...byMatch.values()];
+}
+
+function renderBetMatch(m) {
+  const card = el('div', 'fav-card');
+  card.title = 'Open BetTracker';
+  card.addEventListener('click', openApp);
+  const top = el('div', 'fav-card-top');
+  const star = el('span', 'star-btn is-static');
+  star.title = 'Favoriet door een open bet';
+  star.append(starIcon());
+  top.append(el('span', 'league', m.league), el('span', 'badge', kickoffLabel(m.kickoff)), star);
+  const table = el('div', 'fav-card-table');
+  table.append(teamRow(m.home, ''));
+  if (m.away) table.append(teamRow(m.away, ''));
+  card.append(top, table, pickLines(m.picks, m));
+  return card;
+}
+
+// --- Inklapbare secties ------------------------------------------------------
+// De kopjes op de favorietentab (live, aankomend, afgelopen, aankomende
+// wedstrijden) klap je in met een klik; het paneel onthoudt welke dicht staan.
+
+const COLLAPSED_KEY = 'bettracker-sidepanel-collapsed';
+let collapsedSections = new Set();
+try {
+  const stored = localStorage.getItem(COLLAPSED_KEY);
+  if (stored) collapsedSections = new Set(JSON.parse(stored));
+} catch {
+  // Onthouden is een gemak, geen vereiste.
+}
+
+function toggleSection(key) {
+  if (collapsedSections.has(key)) collapsedSections.delete(key);
+  else collapsedSections.add(key);
+  try {
+    localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsedSections]));
+  } catch {
+    // Zie hierboven.
+  }
+  render();
+}
+
+// Kopje met pijltje en teller; geeft terug of de sectie open staat.
+function sectionHead(key, title, count, className = '') {
+  const isOpen = !collapsedSections.has(key);
+  const head = el('button', `group-title section-head${className ? ` ${className}` : ''}`);
+  head.type = 'button';
+  head.setAttribute('aria-expanded', String(isOpen));
+  head.append(el('span', 'chevron', isOpen ? '▾' : '▸'), el('span', 'section-name', title), el('span', 'group-count', String(count)));
+  head.addEventListener('click', () => toggleSection(key));
+  listEl.append(head);
+  return isOpen;
+}
+
+// --- Aankomende wedstrijden, per competitie inklapbaar -----------------------
+
+const OPEN_LEAGUES_KEY = 'bettracker-sidepanel-open-leagues';
+let openLeagues = null; // null = nog nooit iets ingeklapt: alleen de eerste competitie open
+try {
+  const stored = localStorage.getItem(OPEN_LEAGUES_KEY);
+  if (stored) openLeagues = new Set(JSON.parse(stored));
+} catch {
+  // Onthouden is een gemak, geen vereiste.
+}
+
+function toggleLeague(league, leagues) {
+  if (!openLeagues) openLeagues = new Set(leagues.slice(0, 1));
+  if (openLeagues.has(league)) openLeagues.delete(league);
+  else openLeagues.add(league);
+  try {
+    localStorage.setItem(OPEN_LEAGUES_KEY, JSON.stringify([...openLeagues]));
+  } catch {
+    // Zie hierboven.
+  }
+  render();
+}
+
+function renderUpcomingRow(m) {
+  const row = el('div', 'up-row');
+  row.title = 'Open BetTracker';
+  row.addEventListener('click', openApp);
+  const star = el('button', 'star-btn is-off');
+  star.type = 'button';
+  star.title = 'Aan favorieten toevoegen';
+  star.setAttribute('aria-label', star.title);
+  star.append(starIcon({ outline: true }));
+  star.addEventListener('click', (e) => {
+    e.stopPropagation();
+    favorite(m);
+  });
+  const teams = el('span', 'up-teams', `${m.home} – ${m.away}`);
+  teams.title = teams.textContent;
+  row.append(el('span', 'up-time', shortKickoff(m.kickoff)), teams, star);
+  return row;
+}
+
+function renderUpcomingGames(matches) {
+  // Competities op hun eerstvolgende aftrap; matches komt al gesorteerd binnen.
+  const byLeague = new Map();
+  for (const m of matches) {
+    if (!byLeague.has(m.league)) byLeague.set(m.league, []);
+    byLeague.get(m.league).push(m);
+  }
+  const leagues = [...byLeague.keys()];
+  const open = openLeagues || new Set(leagues.slice(0, 1));
+
+  listEl.append(el('div', 'divider'));
+  if (!sectionHead('games', 'Aankomende wedstrijden vandaag', matches.length)) return;
+  for (const league of leagues) {
+    const isOpen = open.has(league);
+    const head = el('button', `league-head${isOpen ? ' is-open' : ''}`);
+    head.type = 'button';
+    head.setAttribute('aria-expanded', String(isOpen));
+    head.append(el('span', 'chevron', isOpen ? '▾' : '▸'), el('span', 'league-name', league), el('span', 'league-count', String(byLeague.get(league).length)));
+    head.addEventListener('click', () => toggleLeague(league, leagues));
+    listEl.append(head);
+    if (isOpen) for (const m of byLeague.get(league)) listEl.append(renderUpcomingRow(m));
+  }
+}
+
+function favoriteSections({ matches, upcoming, bets }) {
+  const byKickoff = (a, b) => new Date(a.kickoff) - new Date(b.kickoff);
+  const favorites = matches.filter((m) => m.favorite);
+  const knownLegIds = new Set([...matches, ...upcoming].flatMap((m) => (m.picks || []).map((p) => p.legId)));
+  return {
+    live: favorites.filter((m) => LIVE_STATUSES.has(m.status)).sort(byKickoff),
+    // Een favoriet die nog niet begonnen is (ESPN), plus open bets op
+    // wedstrijden die ESPN (nog) niet kent - als kaart vanuit de bet zelf.
+    upcoming: [
+      ...favorites.filter((m) => m.status === 'NS'),
+      ...upcoming.filter((m) => m.favorite),
+      ...upcomingBetMatches(bets, knownLegIds).map((m) => ({ ...m, fromBet: true })),
+    ].sort(byKickoff),
+    done: favorites.filter((m) => DONE_STATUSES.has(m.status)).sort((a, b) => byKickoff(b, a)),
+    // Alleen het programma van vandaag; ESPN levert ook morgen, maar dat
+    // maakt de lijst te lang.
+    others: upcoming.filter((m) => !m.favorite && new Date(m.kickoff).toDateString() === new Date().toDateString()),
+  };
+}
+
+function renderFavorites(sections) {
+  const groups = [
+    { key: 'live', title: 'Live', items: sections.live },
+    { key: 'upcoming', title: 'Aankomende favorieten', items: sections.upcoming },
+    { key: 'done', title: 'Afgelopen', className: 'muted', items: sections.done },
+  ];
+  if (groups.every((g) => g.items.length === 0)) {
+    listEl.append(el('div', 'empty', 'Geen favorieten. Zet een ster op een wedstrijd hieronder of in BetTracker, of plaats een bet.'));
   }
   for (const group of groups) {
     if (group.items.length === 0) continue;
-    listEl.append(el('div', `group-title${group.className ? ` ${group.className}` : ''}`, group.title));
-    for (const m of group.items) listEl.append(renderMatch(m));
+    if (!sectionHead(group.key, group.title, group.items.length, group.className)) continue;
+    for (const m of group.items) listEl.append(m.fromBet ? renderBetMatch(m) : renderMatch(m));
   }
+  if (sections.others.length > 0) renderUpcomingGames(sections.others);
 }
 
 // --- Open bets ---------------------------------------------------------------
@@ -462,7 +652,7 @@ function renderBets(bets, overlay) {
 const TAB_KEY = 'bettracker-sidepanel-tab';
 const tabButtons = document.querySelectorAll('.filter-tab');
 const refreshBtn = document.getElementById('refresh');
-const state = { matches: [], bets: [], overlay: {} };
+const state = { matches: [], upcoming: [], bets: [], overlay: {} };
 let activeTab = 'favorites';
 try {
   activeTab = localStorage.getItem(TAB_KEY) === 'bets' ? 'bets' : 'favorites';
@@ -471,7 +661,8 @@ try {
 }
 
 function render() {
-  document.getElementById('count-favorites').textContent = String(state.matches.filter((m) => m.favorite).length);
+  const sections = favoriteSections(state);
+  document.getElementById('count-favorites').textContent = String(sections.live.length + sections.upcoming.length + sections.done.length);
   document.getElementById('count-bets').textContent = String(state.bets.length);
   for (const button of tabButtons) {
     const active = button.dataset.tab === activeTab;
@@ -480,7 +671,7 @@ function render() {
   }
   listEl.replaceChildren();
   if (activeTab === 'bets') renderBets(state.bets, state.overlay);
-  else renderFavorites(state.matches);
+  else renderFavorites(sections);
   saveSeen();
 }
 
@@ -503,6 +694,7 @@ async function load() {
       getJson('/api/live-scores/open-matches'),
     ]);
     state.matches = live.matches || [];
+    state.upcoming = live.upcoming || [];
     state.bets = Array.isArray(bets) ? bets : [];
     state.overlay = overlay.matches || {};
     render();

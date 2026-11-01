@@ -154,6 +154,135 @@ main {
   color: rgba(244, 242, 232, 0.5);
 }
 
+/* Inklapbaar kopje: zelfde look als .group-title, met pijltje en teller. */
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: calc(100% - 4px);
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+}
+
+.section-head .section-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-head:hover .chevron {
+  color: var(--gold);
+}
+
+.section-head.muted .group-count {
+  background: rgba(244, 242, 232, 0.12);
+  color: rgba(244, 242, 232, 0.7);
+}
+
+/* Zelfde teller als .fav-heading .count in de app. */
+.group-count {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--ink);
+  background: var(--gold-soft);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.divider {
+  height: 1px;
+  margin-top: 18px;
+  background: rgba(244, 242, 232, 0.1);
+}
+
+/* Aankomende wedstrijden: competitiekoppen zoals .live-league-heading in de
+   app, inklapbaar, met compacte rijen zoals .live-match-row. */
+.league-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin: 10px 0 6px;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: rgba(244, 242, 232, 0.6);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+}
+
+.league-head.is-open,
+.league-head:hover {
+  color: var(--gold);
+}
+
+.chevron {
+  width: 10px;
+  flex-shrink: 0;
+  color: rgba(244, 242, 232, 0.5);
+}
+
+.league-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.league-count {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: rgba(244, 242, 232, 0.5);
+}
+
+.up-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding: 7px 8px 7px 10px;
+  background: rgba(10, 18, 16, 0.4);
+  border: 1px solid rgba(244, 242, 232, 0.1);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.up-row:hover {
+  border-color: rgba(232, 178, 61, 0.4);
+}
+
+.up-time {
+  flex-shrink: 0;
+  min-width: 38px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--gold);
+}
+
+.up-teams {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: rgba(244, 242, 232, 0.85);
+}
+
 .fav-card {
   display: flex;
   flex-direction: column;
@@ -260,6 +389,22 @@ main {
 
 .star-btn:active {
   transform: scale(0.92);
+}
+
+/* Nog geen favoriet - zelfde omlijnde ster als in het live-overzicht van de app. */
+.star-btn.is-off {
+  border-color: rgba(232, 178, 61, 0.4);
+  background: transparent;
+  color: var(--gold-soft);
+}
+
+.star-btn.is-off:hover {
+  background: rgba(232, 178, 61, 0.14);
+}
+
+/* Favoriet door een bet zonder ESPN-wedstrijd: er valt niets aan te zetten. */
+.star-btn.is-static {
+  cursor: default;
 }
 
 /* Acties: banner voor de nieuwste goal/rode kaart, chips voor eerdere recente
@@ -652,8 +797,13 @@ main {
   color: var(--red);
 }
 
+/* Blijft onderaan zweven tijdens het scrollen, net als de header bovenaan. */
 footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   padding: 12px 14px;
+  background: rgba(8, 23, 20, 0.92);
   border-top: 1px solid rgba(232, 178, 61, 0.25);
 }
 

@@ -390,9 +390,10 @@ function toOverlay(live) {
   };
 }
 
-function findLiveRecordFor({ home, away, competition, commenceTime }) {
+function findLiveRecordFor({ home, away, competition, commenceTime }, { includeUpcoming = false } = {}) {
   const commence = commenceTime ? new Date(commenceTime).getTime() : null;
-  for (const live of matchStore.values()) {
+  const candidates = includeUpcoming ? [...matchStore.values(), ...upcomingStore.values()] : matchStore.values();
+  for (const live of candidates) {
     if (live.league !== competition) continue;
     if (!teamNamesMatch(live.home, home) || !teamNamesMatch(live.away, away)) continue;
     if (commence !== null && live.kickoff) {
@@ -412,8 +413,10 @@ export function findLiveMatchFor(params) {
 // Zelfde fuzzy match als findLiveMatchFor, maar geeft het live-ID terug i.p.v.
 // de overlay - gebruikt om favorieten-op-basis-van-een-bet te herkennen (zie
 // getFavoriteState() in index.js) zonder de matching-logica te dupliceren.
-export function findLiveMatchIdFor(params) {
-  const live = findLiveRecordFor(params);
+// includeUpcoming zoekt ook in de nog niet begonnen wedstrijden, zodat een
+// bet op een wedstrijd van vanavond al vóór de aftrap als favoriet telt.
+export function findLiveMatchIdFor(params, options) {
+  const live = findLiveRecordFor(params, options);
   return live ? live.id : null;
 }
 
@@ -479,6 +482,12 @@ export function isInPlayStatus(status) {
 
 export function getLiveScores() {
   return cache;
+}
+
+// Nog niet begonnen wedstrijden uit de getrackte competities (vandaag en
+// morgen), op aftrap - voor de sectie "Aankomende wedstrijden" in het zijpaneel.
+export function getUpcomingMatches() {
+  return [...upcomingStore.values()].sort((a, b) => parseKickoffUtc(a.kickoff) - parseKickoffUtc(b.kickoff));
 }
 
 export function startLiveScoresPoller() {

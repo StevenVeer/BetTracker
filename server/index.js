@@ -4,7 +4,7 @@ import cors from 'cors';
 import { randomUUID } from 'node:crypto';
 import { pool, ensureSchema } from './db.js';
 import { buildReportExport } from './reportGenerator.js';
-import { getLiveScores, startLiveScoresPoller, findLiveMatchFor, findLiveMatchIdFor, getLiveMatchOverlayById, findLinkCandidates, parseKickoffUtc, FINISHED_STATUSES } from './liveScores.js';
+import { getLiveScores, getUpcomingMatches, startLiveScoresPoller, findLiveMatchFor, findLiveMatchIdFor, getLiveMatchOverlayById, findLinkCandidates, parseKickoffUtc, FINISHED_STATUSES } from './liveScores.js';
 import { getMatchDetail } from './matchDetail.js';
 import { LEAGUES } from './leagues.js';
 import { extractBetsFromImages, extractBetsFromText } from './screenshotImport.js';
@@ -1661,12 +1661,15 @@ async function getFavoriteState() {
       // huidige bron wijst - oude koppelingen uit de vorige bron (andere
       // ID-reeks) vallen zo terug op de fuzzy match i.p.v. stil niets te doen.
       const linked = row.tsdb_live_id && getLiveMatchOverlayById(row.tsdb_live_id) ? row.tsdb_live_id : null;
-      tsdbId = linked || findLiveMatchIdFor({
-        home: row.home,
-        away: row.away,
-        competition: row.competition,
-        commenceTime: row.commence_time,
-      });
+      tsdbId = linked || findLiveMatchIdFor(
+        {
+          home: row.home,
+          away: row.away,
+          competition: row.competition,
+          commenceTime: row.commence_time,
+        },
+        { includeUpcoming: true }
+      );
       tsdbIdByMatchId.set(row.match_id, tsdbId);
     }
     if (!tsdbId) continue;
@@ -1718,7 +1721,14 @@ app.get('/api/live-scores', async (req, res) => {
       if (override === null && fields.picks && !FINISHED_STATUSES.has(m.status)) toPersist.push(m.id);
       return { ...m, ...fields };
     });
-    res.json({ ...base, matches });
+    // Aankomende wedstrijden (vandaag en morgen) voor het zijpaneel, met
+    // dezelfde favoriet-/pick-velden. Hier niets vastleggen: dat gebeurt
+    // vanzelf hierboven zodra de wedstrijd begint.
+    const upcoming = getUpcomingMatches().map((m) => {
+      const { override, ...fields } = favoriteFields(m, favoriteState);
+      return { ...m, ...fields };
+    });
+    res.json({ ...base, matches, upcoming });
     for (const id of toPersist) {
       pool
         .query(
@@ -1730,7 +1740,7 @@ app.get('/api/live-scores', async (req, res) => {
   } catch (error) {
     // Favorieten zijn puur verrijking - een mislukte query mag de rest van
     // het live-overzicht niet blokkeren.
-    res.json(base);
+    res.json({ ...base, upcoming: getUpcomingMatches() });
   }
 });
 
