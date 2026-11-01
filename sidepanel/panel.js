@@ -718,6 +718,8 @@ for (const button of tabButtons) {
 }
 
 refreshBtn.addEventListener('click', load);
+// Sluit het zijpaneel zelf; openen gaat weer via het icoon of Alt+Shift+F.
+document.getElementById('close').addEventListener('click', () => window.close());
 document.getElementById('open-app').addEventListener('click', openApp);
 // Een verborgen paneel hoeft niet te pollen; bij terugkomen meteen verversen.
 document.addEventListener('visibilitychange', () => {

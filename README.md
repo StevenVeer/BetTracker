@@ -78,7 +78,7 @@ Een tweede, losse extensie in `sidepanel/`: een zijpaneel rechts in de browser m
 - **Bets** – je open bets met totale inzet, mogelijke uitbetaling en aantal live bets bovenaan; per bet de legs met status (gewonnen, live met stand en minuut, of aftrap), een voortgangsbalk bij combi's en eventueel het cash-out bedrag.
 
 1. Kies in `chrome://extensions` **Uitgepakte extensie laden** en selecteer de map `sidepanel/`.
-2. Zet het icoon vast en klik erop (of druk Alt+Shift+F) om het paneel te openen.
+2. Zet het icoon vast en klik erop (of druk Alt+Shift+F) om het paneel te openen. Met het kruisje rechtsboven sluit je het weer.
 
 Met de ster haal je een wedstrijd uit je favorieten; een klik op een wedstrijd opent BetTracker. Werkt in Chrome, Edge en Brave (side panel API).
 

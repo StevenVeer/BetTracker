@@ -117,7 +117,8 @@ header {
   color: var(--ink);
 }
 
-#refresh {
+/* Vernieuwen en sluiten: zelfde gouden rondje. */
+.round-btn {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -132,7 +133,11 @@ header {
   line-height: 1;
 }
 
-#refresh:hover {
+#close {
+  font-size: 11px;
+}
+
+.round-btn:hover {
   background: rgba(232, 178, 61, 0.14);
 }
 
