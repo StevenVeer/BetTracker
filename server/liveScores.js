@@ -39,6 +39,7 @@ const ESPN_LEAGUE_IDS = {
   soccer_uefa_champs_league_women: '19483',
   soccer_portugal_primeira_liga: '715',
   soccer_portugal_taca: '20922',
+  soccer_netherlands_eerste_divisie: '3933',
   soccer_efl_champ: '3914',
   soccer_fa_cup: '3918',
   soccer_england_efl_cup: '3920',
