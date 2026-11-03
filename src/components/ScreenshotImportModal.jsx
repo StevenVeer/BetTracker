@@ -101,10 +101,20 @@ function fillMissingOdds(draft) {
   return { legs, notes: [draft.notes, 'odds per leg verdeeld uit totaal'].filter(Boolean).join(' - ') };
 }
 
+// Bij een single zijn de totale odds en de odds van de leg hetzelfde getal:
+// vult het model er maar één van in, dan nemen we die voor beide over.
+function syncSingleOdds(draft) {
+  if (draft.legs.length !== 1) return draft;
+  const [leg] = draft.legs;
+  if (!hasOdds(leg) && Number(draft.odds) >= 1.01) return { ...draft, legs: [{ ...leg, odds: draft.odds }] };
+  if (hasOdds(leg) && !(Number(draft.odds) >= 1.01)) return { ...draft, odds: leg.odds };
+  return draft;
+}
+
 function toDraft(bet, bookmakers) {
   const match = bookmakers.find((b) => b.toLowerCase() === String(bet.bookmaker || '').toLowerCase());
   const settledAt = bet.settledAt && !Number.isNaN(parseLocal(bet.settledAt).getTime()) ? parseLocal(bet.settledAt).toISOString() : null;
-  return {
+  return syncSingleOdds({
     include: !bet.duplicateOf,
     duplicate: Boolean(bet.duplicateOf),
     bookmaker: match || '',
@@ -134,7 +144,7 @@ function toDraft(bet, bookmakers) {
       parts: (leg.parts || []).map((part) => ({ market: part.market || '', pick: part.pick || '' })),
       earlyPayout: Boolean(leg.earlyPayout),
     })),
-  };
+  });
 }
 
 const isBetBuilder = (leg) => leg.parts.length > 1;
@@ -261,15 +271,26 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
     }
   }
 
+  // Bij een single lopen de totale odds en de leg-odds gelijk op.
   function updateDraft(index, patch) {
-    setDrafts((prev) => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)));
+    setDrafts((prev) =>
+      prev.map((d, i) => {
+        if (i !== index) return d;
+        const next = { ...d, ...patch };
+        if ('odds' in patch && next.legs.length === 1) next.legs = [{ ...next.legs[0], odds: patch.odds }];
+        return next;
+      })
+    );
   }
 
   function updateLeg(index, legIndex, patch) {
     setDrafts((prev) =>
-      prev.map((d, i) =>
-        i === index ? { ...d, legs: d.legs.map((l, j) => (j === legIndex ? { ...l, ...patch } : l)) } : d
-      )
+      prev.map((d, i) => {
+        if (i !== index) return d;
+        const next = { ...d, legs: d.legs.map((l, j) => (j === legIndex ? { ...l, ...patch } : l)) };
+        if ('odds' in patch && next.legs.length === 1) next.odds = patch.odds;
+        return next;
+      })
     );
   }
 
