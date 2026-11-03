@@ -324,12 +324,43 @@ function renderMatch(m) {
   return card;
 }
 
+// Dezelfde pick uit meerdere bets één keer, met "3×" ervoor (zelfde regel
+// als groupSamePicks in src/markets.js). Bet builders blijven los.
+function groupSamePicks(picks) {
+  const groups = new Map();
+  picks.forEach((p, i) => {
+    const key =
+      Array.isArray(p.parts) && p.parts.length > 1
+        ? `bb:${p.legId ?? p.id ?? i}`
+        : [p.market, String(p.selection ?? '').trim().toLowerCase(), p.line ?? '', p.earlyPayout ? 'ep' : ''].join('|');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(p);
+  });
+  return [...groups.values()];
+}
+
+function oddsRange(picks) {
+  const odds = picks.map((p) => Number(p.odds)).filter((n) => Number.isFinite(n) && n > 0);
+  if (odds.length === 0) return null;
+  const lo = Math.min(...odds).toFixed(2);
+  const hi = Math.max(...odds).toFixed(2);
+  return lo === hi ? lo : `${lo}–${hi}`;
+}
+
 function pickLines(picks, match) {
   const lines = el('div', 'pick-lines');
-  for (const p of picks) {
+  for (const same of groupSamePicks(picks)) {
+    const p = same[0];
     const row = el('div', 'pick-line');
-    row.append(el('span', 'market', MARKET_ABBR[p.market] || p.market), document.createTextNode(pickLabel(p, match)));
-    if (Number.isFinite(Number(p.odds))) row.append(el('span', 'odds', Number(p.odds).toFixed(2)));
+    row.append(el('span', 'market', MARKET_ABBR[p.market] || p.market));
+    if (same.length > 1) {
+      const count = el('span', 'pick-count', `${same.length}×`);
+      count.title = same.map((s) => s.bookmaker).filter(Boolean).join(', ');
+      row.append(count);
+    }
+    row.append(document.createTextNode(pickLabel(p, match)));
+    const odds = oddsRange(same);
+    if (odds) row.append(el('span', 'odds', odds));
     lines.append(row);
   }
   return lines;

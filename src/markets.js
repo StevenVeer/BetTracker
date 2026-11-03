@@ -117,3 +117,32 @@ export const STATUS_LABELS = {
   void: 'Void',
   cashed_out: 'Cashed out',
 };
+
+// Dezelfde pick (markt + keuze + lijn) uit meerdere bets op één wedstrijd
+// tonen we één keer met "3×" ervoor. Bet builders blijven los: hun
+// onderdelen worden per leg afgehandeld. Verwacht picks van één wedstrijd.
+export function groupSamePicks(picks) {
+  const groups = new Map();
+  picks.forEach((pick, i) => {
+    const key = isBetBuilder(pick)
+      ? `bb:${pick.id ?? pick.legId ?? i}`
+      : [pick.market, String(pick.selection ?? '').trim().toLowerCase(), pick.line ?? '', pick.earlyPayout ? 'ep' : ''].join('|');
+    if (!groups.has(key)) groups.set(key, { key, pick, picks: [] });
+    groups.get(key).picks.push(pick);
+  });
+  return [...groups.values()];
+}
+
+// "1.85" of bij verschillende odds per bookmaker "1.80–1.85".
+export function oddsRange(picks) {
+  const odds = picks.map((p) => Number(p.odds)).filter((n) => Number.isFinite(n) && n > 0);
+  if (odds.length === 0) return null;
+  const lo = Math.min(...odds).toFixed(2);
+  const hi = Math.max(...odds).toFixed(2);
+  return lo === hi ? lo : `${lo}–${hi}`;
+}
+
+// "Unibet · Toto (combi) · Bet365 (combi)"
+export function bookmakerSummary(picks) {
+  return picks.map((p) => `${p.bookmaker || '—'}${p.isCombi ? ' (combi)' : ''}`).join(' · ');
+}

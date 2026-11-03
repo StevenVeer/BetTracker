@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { describeBet, isBetBuilder, withPartStatus } from '../markets.js';
+import { bookmakerSummary, describeBet, groupSamePicks, isBetBuilder, oddsRange, withPartStatus } from '../markets.js';
 import { formatKickoff, legKickoff, legLabel, ScoreBadge } from './BetList.jsx';
 import { BuilderPartRows } from './liveShared.jsx';
 import EarlyPayoutBadge from './EarlyPayoutBadge.jsx';
@@ -52,6 +52,8 @@ export default function OpenBetsModal({
             {groups.map((group) => {
               const first = group.picks[0];
               const count = group.picks.length;
+              // Dezelfde pick uit meerdere bets: één regel, afhandelen geldt voor alle.
+              const rows = groupSamePicks(group.picks);
               return (
                 <section className="ob-group" key={group.key}>
                   <header className="ob-group-head">
@@ -59,18 +61,19 @@ export default function OpenBetsModal({
                       <strong>{legLabel(first)}</strong>
                       <span>
                         {legKickoff(first) ? `${formatKickoff(legKickoff(first))} · ` : ''}
-                        {count} {count === 1 ? 'pick' : 'picks'}
+                        {rows.length} {rows.length === 1 ? 'pick' : 'picks'}
+                        {rows.length !== count && ` · ${count} bets`}
                       </span>
                     </div>
                     {!group.manual && <ScoreBadge leg={first} onLinked={onLiveLinked} />}
                   </header>
-                  {group.picks.map((pick) => (
-                    <div className="ob-pick" key={pick.id}>
+                  {rows.map(({ key, pick, picks: same }) => (
+                    <div className="ob-pick" key={key}>
+                      <span className={`ob-count${same.length > 1 ? ' is-multi' : ''}`}>{same.length}×</span>
                       <div className="ob-pick-info">
                         <span className="ob-pick-name">{isBetBuilder(pick) ? `Bet builder · ${pick.parts.length} selecties` : describeBet(pick)}<EarlyPayoutBadge leg={pick} /></span>
                         <span className="ob-pick-meta">
-                          <span className="ob-bk">{pick.bookmaker}</span>
-                          {pick.isCombi && <span className="ob-combi">combi</span>}
+                          <span className="ob-bk-summary">{bookmakerSummary(same)}</span>
                           {group.manual && <ScoreBadge leg={pick} onLinked={onLiveLinked} />}
                         </span>
                         {isBetBuilder(pick) && (
@@ -80,24 +83,24 @@ export default function OpenBetsModal({
                           />
                         )}
                       </div>
-                      <span className="ob-odds">@ {Number(pick.odds).toFixed(2)}</span>
+                      <span className="ob-odds">@ {oddsRange(same)}</span>
                       {!isBetBuilder(pick) && (
                       <span className="ob-actions">
                         <button
                           type="button"
                           className="ob-btn ob-won"
-                          title="Gewonnen"
+                          title={same.length > 1 ? `Gewonnen (alle ${same.length})` : 'Gewonnen'}
                           aria-label="Gewonnen"
-                          onClick={() => onSettle(pick.id, { status: 'won' })}
+                          onClick={() => same.forEach((p) => onSettle(p.id, { status: 'won' }))}
                         >
                           ✓
                         </button>
                         <button
                           type="button"
                           className="ob-btn ob-lost"
-                          title="Verloren"
+                          title={same.length > 1 ? `Verloren (alle ${same.length})` : 'Verloren'}
                           aria-label="Verloren"
-                          onClick={() => onSettle(pick.id, { status: 'lost' })}
+                          onClick={() => same.forEach((p) => onSettle(p.id, { status: 'lost' }))}
                         >
                           ✕
                         </button>

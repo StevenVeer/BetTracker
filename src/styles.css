@@ -580,6 +580,27 @@ body {
   border-radius: 999px;
   color: var(--gold-soft);
 }
+.ob-count {
+  flex-shrink: 0;
+  min-width: 26px;
+  font-family: 'Space Mono', ui-monospace, SFMono-Regular, monospace;
+  font-size: 13px;
+  color: rgba(244, 242, 232, 0.35);
+}
+.ob-count.is-multi {
+  color: var(--gold);
+  font-weight: 700;
+}
+.ob-bk-summary {
+  font-size: 12px;
+  color: rgba(244, 242, 232, 0.55);
+}
+.pick-line .pick-count {
+  font-family: 'Space Mono', ui-monospace, SFMono-Regular, monospace;
+  font-weight: 700;
+  color: var(--gold);
+  margin-right: 6px;
+}
 .ob-odds {
   flex-shrink: 0;
   min-width: 54px;

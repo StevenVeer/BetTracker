@@ -1,4 +1,13 @@
-import { describeBet, isBetBuilder, MARKET_ABBR, partStatus, STATUS_LABELS as LEG_STATUS_LABELS } from '../markets.js';
+import {
+  bookmakerSummary,
+  describeBet,
+  groupSamePicks,
+  isBetBuilder,
+  MARKET_ABBR,
+  oddsRange,
+  partStatus,
+  STATUS_LABELS as LEG_STATUS_LABELS,
+} from '../markets.js';
 import EarlyPayoutBadge from './EarlyPayoutBadge.jsx';
 
 // Gedeeld tussen het live-overzicht (LiveScores.jsx) en de wedstrijd-
@@ -66,9 +75,10 @@ export function PickLines({ picks, match }) {
   if (!picks || picks.length === 0) return null;
   return (
     <div className="pick-lines">
-      {picks.map((p, i) => (
-        <div className="pick-line" key={i}>
+      {groupSamePicks(picks).map(({ key, pick: p, picks: same }) => (
+        <div className="pick-line" key={key}>
           <span className="market">{MARKET_ABBR[p.market] || p.market}</span>
+          {same.length > 1 && <span className="pick-count">{same.length}×</span>}
           {pickLabel(p, match)}
           <EarlyPayoutBadge leg={p} />
         </div>
@@ -112,9 +122,12 @@ export function BuilderPartRows({ parts, onSettlePart }) {
 // Picks op de detailpagina met dezelfde hit/mis-knoppen als in de Open
 // bets-popup. Net afgehandelde picks blijven met hun uitslag staan. Bij een
 // bet builder gaan de knoppen per onderdeel (onSettlePart).
+// Dezelfde pick uit meerdere bets staat er één keer met "3×" ervoor; de
+// knoppen handelen dan alle legs tegelijk af.
 export function SettlePickRows({ openPicks, settledPicks, match, onSettle, onSettlePart }) {
-  const row = (p, actions) => (
-    <div className="ob-pick" key={p.legId || p.selection}>
+  const row = ({ key, pick: p, picks: same }, actions) => (
+    <div className="ob-pick" key={key}>
+      <span className={`ob-count${same.length > 1 ? ' is-multi' : ''}`}>{same.length}×</span>
       <div className="ob-pick-info">
         <span className="ob-pick-name">
           <span className="pick-line">
@@ -125,35 +138,39 @@ export function SettlePickRows({ openPicks, settledPicks, match, onSettle, onSet
         </span>
         {p.bookmaker && (
           <span className="ob-pick-meta">
-            <span className="ob-bk">{p.bookmaker}</span>
-            {p.isCombi && <span className="ob-combi">combi</span>}
+            <span className="ob-bk-summary">{bookmakerSummary(same)}</span>
           </span>
         )}
         {isBetBuilder(p) && p.legId && <BuilderPartRows parts={p.parts} onSettlePart={(i, status) => onSettlePart(p, i, status)} />}
       </div>
-      {p.odds ? <span className="ob-odds">@ {Number(p.odds).toFixed(2)}</span> : null}
+      {oddsRange(same) ? <span className="ob-odds">@ {oddsRange(same)}</span> : null}
       {actions}
     </div>
   );
+  const settle = (same, status) => same.forEach((p) => onSettle(p, status));
+  // Afgehandeld per uitslag groeperen, zodat "3× gewonnen" niet een verloren leg verstopt.
+  const settledRows = ['won', 'lost', 'void', 'cashed_out'].flatMap((status) =>
+    groupSamePicks(settledPicks.filter((p) => p.status === status)).map((g) => ({ ...g, key: `${status}:${g.key}` }))
+  );
   return (
     <div className="md-settle-picks">
-      {openPicks.map((p) =>
+      {groupSamePicks(openPicks).map((g) =>
         row(
-          p,
-          p.legId && !isBetBuilder(p) ? (
+          g,
+          g.pick.legId && !isBetBuilder(g.pick) ? (
             <span className="ob-actions">
-              <button type="button" className="ob-btn ob-won" title="Gewonnen" aria-label="Gewonnen" onClick={() => onSettle(p, 'won')}>
+              <button type="button" className="ob-btn ob-won" title="Gewonnen" aria-label="Gewonnen" onClick={() => settle(g.picks, 'won')}>
                 ✓
               </button>
-              <button type="button" className="ob-btn ob-lost" title="Verloren" aria-label="Verloren" onClick={() => onSettle(p, 'lost')}>
+              <button type="button" className="ob-btn ob-lost" title="Verloren" aria-label="Verloren" onClick={() => settle(g.picks, 'lost')}>
                 ✕
               </button>
             </span>
           ) : null
         )
       )}
-      {settledPicks.map((p) =>
-        row(p, <span className={`leg-status leg-status-${p.status}`}>{LEG_STATUS_LABELS[p.status]}</span>)
+      {settledRows.map((g) =>
+        row(g, <span className={`leg-status leg-status-${g.pick.status}`}>{LEG_STATUS_LABELS[g.pick.status]}</span>)
       )}
     </div>
   );
