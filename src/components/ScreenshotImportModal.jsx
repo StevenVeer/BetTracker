@@ -135,15 +135,22 @@ function toDraft(bet, bookmakers) {
     // Coupon-nummer in de notitie: daarmee herkent een volgende import de bet
     // als al aanwezig.
     notes: [bet.couponId && `Coupon ${bet.couponId}`, bet.note].filter(Boolean).join(' - '),
-    legs: (bet.legs || []).map((leg) => ({
-      home: leg.home || '',
-      away: leg.away || '',
-      selection: leg.selection || '',
-      odds: leg.odds != null ? String(leg.odds) : '',
-      kickoffAt: toLocalInput(leg.kickoffAt),
-      parts: (leg.parts || []).map((part) => ({ market: part.market || '', pick: part.pick || '' })),
-      earlyPayout: Boolean(leg.earlyPayout),
-    })),
+    legs: (bet.legs || []).map((leg) => {
+      const parts = (leg.parts || []).map((part) => ({ market: part.market || '', pick: part.pick || '' }));
+      // Geeft het model alleen het kopje "Bet builder" met minder dan twee
+      // onderdelen, dan toont de preview het ene onderdeel (of een leeg veld
+      // dat ingevuld moet worden) in plaats van dat kopje op te slaan.
+      const selection = PLACEHOLDER_SELECTION.test(leg.selection || '') ? (parts.length === 1 ? partText(parts[0]) : '') : leg.selection || '';
+      return {
+        home: leg.home || '',
+        away: leg.away || '',
+        selection,
+        odds: leg.odds != null ? String(leg.odds) : '',
+        kickoffAt: toLocalInput(leg.kickoffAt),
+        parts: parts.length > 1 ? parts : [],
+        earlyPayout: Boolean(leg.earlyPayout),
+      };
+    }),
   });
 }
 
@@ -153,9 +160,14 @@ const isBetBuilder = (leg) => leg.parts.length > 1;
 // duplicaatherkenning en link-suggesties lezen alleen dat veld.
 const partText = (part) => [part.market.trim(), part.pick.trim()].filter(Boolean).join(': ');
 
+// Alleen het kopje "Bet builder" zegt niets over de picks: dat telt als leeg,
+// zodat de preview "selectie ontbreekt" toont in plaats van het zo op te slaan.
+const PLACEHOLDER_SELECTION = /^\s*\(?bet ?builder\)?\s*$/i;
+
 function legSelection(leg) {
   const parts = leg.parts.filter((part) => part.pick.trim());
-  if (parts.length < 2) return leg.selection.trim() || (parts[0] ? partText(parts[0]) : '');
+  const selection = PLACEHOLDER_SELECTION.test(leg.selection) ? '' : leg.selection.trim();
+  if (parts.length < 2) return selection || (parts[0] ? partText(parts[0]) : '');
   return `${parts.map(partText).join(' + ')} (bet builder)`;
 }
 
