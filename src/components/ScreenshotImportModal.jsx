@@ -111,6 +111,42 @@ function syncSingleOdds(draft) {
   return draft;
 }
 
+// "Markt: keuze" als bet builder-onderdeel (zelfde splitsing als
+// splitBetBuilderSelection op de server).
+function selectionToPart(selection) {
+  const colon = selection.lastIndexOf(': ');
+  return colon > 0 ? { market: selection.slice(0, colon).trim(), pick: selection.slice(colon + 2).trim() } : { market: '', pick: selection.trim() };
+}
+
+// Unibet, BetNation en co. tonen een bet builder als gewone regels onder
+// elkaar, en dan maakt het model er losse legs van. Legs op dezelfde wedstrijd
+// met hooguit één gezamenlijke odd worden hier alsnog één bet builder-leg.
+// Hebben ze verschillende eigen odds, of mist er een selectie, dan blijven ze
+// los staan.
+function mergeSameMatchLegs(legs) {
+  const groups = new Map();
+  legs.forEach((leg, i) => {
+    const key = leg.home.trim() || leg.away.trim() ? matchKey(leg) : i;
+    groups.set(key, [...(groups.get(key) || []), leg]);
+  });
+  return [...groups.values()].flatMap((group) => {
+    if (group.length === 1) return group;
+    const odds = new Set(group.filter(hasOdds).map((leg) => Number(leg.odds)));
+    const parts = group.flatMap((leg) => (isBetBuilder(leg) ? leg.parts : [selectionToPart(leg.selection)]));
+    if (odds.size > 1 || parts.some((part) => !part.pick)) return group;
+    return [
+      {
+        ...group[0],
+        selection: '',
+        odds: group.find(hasOdds)?.odds ?? '',
+        kickoffAt: group.find((leg) => leg.kickoffAt)?.kickoffAt ?? '',
+        parts,
+        earlyPayout: group.some((leg) => leg.earlyPayout),
+      },
+    ];
+  });
+}
+
 function toDraft(bet, bookmakers) {
   const match = bookmakers.find((b) => b.toLowerCase() === String(bet.bookmaker || '').toLowerCase());
   const settledAt = bet.settledAt && !Number.isNaN(parseLocal(bet.settledAt).getTime()) ? parseLocal(bet.settledAt).toISOString() : null;
@@ -135,7 +171,7 @@ function toDraft(bet, bookmakers) {
     // Coupon-nummer in de notitie: daarmee herkent een volgende import de bet
     // als al aanwezig.
     notes: [bet.couponId && `Coupon ${bet.couponId}`, bet.note].filter(Boolean).join(' - '),
-    legs: (bet.legs || []).map((leg) => {
+    legs: mergeSameMatchLegs((bet.legs || []).map((leg) => {
       const parts = (leg.parts || []).map((part) => ({ market: part.market || '', pick: part.pick || '' }));
       // Geeft het model alleen het kopje "Bet builder" met minder dan twee
       // onderdelen, dan toont de preview het ene onderdeel (of een leeg veld
@@ -150,7 +186,7 @@ function toDraft(bet, bookmakers) {
         parts: parts.length > 1 ? parts : [],
         earlyPayout: Boolean(leg.earlyPayout),
       };
-    }),
+    })),
   });
 }
 

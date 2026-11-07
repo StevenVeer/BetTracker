@@ -181,34 +181,43 @@ export function ScoreBadge({ leg, onLinked }) {
 
 const PART_MARKS = { won: '✓', lost: '✕', void: '⌀' };
 
-function LegRow({ leg, onLiveLinked }) {
+// builderCard: de leg is een hele bet (single bet builder). De kop van de kaart
+// zegt dan al "Bet builder", dus hier de competitie en het aantal selecties.
+function LegRow({ leg, onLiveLinked, builderCard = false }) {
+  const builder = isBetBuilder(leg);
+  const kickoff = legKickoff(leg) ? formatKickoff(legKickoff(leg)) : null;
   return (
-    <div className="leg-row">
-      <div className="leg-info">
-        <span className="leg-match">{legLabel(leg)}</span>
-        <span className="muted">
-          {isBetBuilder(leg) ? `Bet builder · ${leg.parts.length} selecties` : describeBet(leg)}
-          <EarlyPayoutBadge leg={leg} />
-          {legKickoff(leg) ? ` · ${formatKickoff(legKickoff(leg))}` : ''}
-        </span>
-        {isBetBuilder(leg) && (
-          <ul className="leg-parts">
-            {leg.parts.map((part, i) => (
-              <li key={i} className={`leg-part-${partStatus(part)}`}>
-                <span>
-                  {part.pick}
-                  {partStatus(part) !== 'open' && <span className="leg-part-mark">{PART_MARKS[partStatus(part)]}</span>}
-                </span>
-                {part.market && <span className="muted">{part.market}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
+    <>
+      <div className={`leg-row${builder ? ' is-builder' : ''}`}>
+        <div className="leg-info">
+          <span className="leg-match">{legLabel(leg)}</span>
+          <span className="muted">
+            {builderCard
+              ? [leg.match?.competition, kickoff, `${leg.parts.length} selecties`].filter(Boolean).join(' · ')
+              : builder
+                ? `Bet builder · ${leg.parts.length} selecties`
+                : describeBet(leg)}
+            <EarlyPayoutBadge leg={leg} />
+            {!builderCard && kickoff ? ` · ${kickoff}` : ''}
+          </span>
+        </div>
+        <ScoreBadge leg={leg} onLinked={onLiveLinked} />
+        <span className="leg-odds">@ {Number(leg.odds).toFixed(2)}</span>
+        <span className={`leg-status leg-status-${leg.status}`}>{STATUS_LABELS[leg.status]}</span>
       </div>
-      <ScoreBadge leg={leg} onLinked={onLiveLinked} />
-      <span className="leg-odds">@ {Number(leg.odds).toFixed(2)}</span>
-      <span className={`leg-status leg-status-${leg.status}`}>{STATUS_LABELS[leg.status]}</span>
-    </div>
+      {builder &&
+        leg.parts.map((part, i) => (
+          <div key={i} className={`leg-row leg-part-row leg-part-${partStatus(part)}`}>
+            <div className="leg-info">
+              <span className="leg-match">
+                {part.pick}
+                {partStatus(part) !== 'open' && <span className="leg-part-mark">{PART_MARKS[partStatus(part)]}</span>}
+              </span>
+              {part.market && <span className="muted">{part.market}</span>}
+            </div>
+          </div>
+        ))}
+    </>
   );
 }
 
@@ -737,6 +746,7 @@ export default function BetList({ bets, onUpdate, onUpdateLeg, onDelete, onLiveL
       <ul className="bet-list">
         {bets.slice(0, visibleCount).map((bet) => {
           const isCombi = bet.legs.length > 1;
+          const builderCard = !isCombi && isBetBuilder(bet.legs[0]);
           const sortMode = parlaySort[bet.id] ? 'time' : 'default';
           const boosted = isBoostedBet(bet);
           const rawOdds = bet.legs.reduce((acc, leg) => acc * Number(leg.odds), 1);
@@ -757,28 +767,33 @@ export default function BetList({ bets, onUpdate, onUpdateLeg, onDelete, onLiveL
                 </button>
               </div>
 
-              {isCombi ? (
+              {isCombi || builderCard ? (
                 <>
                   <div className="bet-combi-heading">
-                    <span className="muted">Combi · {bet.legs.length} selecties · {bet.bookmaker}</span>
-                    <button
-                      type="button"
-                      className={`parlay-sort-btn${sortMode === 'time' ? ' is-active' : ''}`}
-                      onClick={() => toggleParlaySort(bet.id)}
-                      title={sortMode === 'time' ? 'Gesorteerd op starttijd - klik voor standaardvolgorde' : 'Standaardvolgorde - klik om op starttijd te sorteren'}
-                    >
-                      <InlineIcon name={sortMode === 'time' ? 'sort-time' : 'sort-default'} size={11} />
-                      {sortMode === 'time' ? 'Tijd' : 'Standaard'}
-                    </button>
+                    <span className="muted">
+                      {builderCard ? `Bet builder · ${bet.bookmaker}` : `Combi · ${bet.legs.length} selecties · ${bet.bookmaker}`}
+                    </span>
+                    {isCombi && (
+                      <button
+                        type="button"
+                        className={`parlay-sort-btn${sortMode === 'time' ? ' is-active' : ''}`}
+                        onClick={() => toggleParlaySort(bet.id)}
+                        title={sortMode === 'time' ? 'Gesorteerd op starttijd - klik voor standaardvolgorde' : 'Standaardvolgorde - klik om op starttijd te sorteren'}
+                      >
+                        <InlineIcon name={sortMode === 'time' ? 'sort-time' : 'sort-default'} size={11} />
+                        {sortMode === 'time' ? 'Tijd' : 'Standaard'}
+                      </button>
+                    )}
                   </div>
                   <div className="leg-list">
                     {sortParlayLegs(bet.legs, sortMode).map((leg) => (
-                      <LegRow key={leg.id} leg={leg} onLiveLinked={onLiveLinked} />
+                      <LegRow key={leg.id} leg={leg} onLiveLinked={onLiveLinked} builderCard={builderCard} />
                     ))}
                   </div>
                   <div className="bet-main bet-main-combi">
                     <span className="bet-numbers">
-                      <span>Totaal @ {oddsCell}</span>
+                      {/* Bij een single bet builder staan de odds al op de leg, behalve bij een boost. */}
+                      {(isCombi || boosted) && <span>Totaal @ {oddsCell}</span>}
                       <span>
                         EUR <Amount>{Number(bet.stake).toFixed(2)}</Amount>
                       </span>
