@@ -61,7 +61,9 @@ function LiveLinkModal({ matchLabel, matchId, legId, onLinked, onClose }) {
   useEffect(() => {
     api
       .getLiveScores()
-      .then((data) => setLiveMatches(data.matches || []))
+      // Ook de nog niet begonnen wedstrijden (vandaag/morgen), zodat je een
+      // pick al vóór de aftrap kunt koppelen - niet pas als hij live is.
+      .then((data) => setLiveMatches([...(data.matches || []), ...(data.upcoming || [])]))
       .catch(() => setLiveMatches([]));
   }, []);
 
@@ -93,7 +95,7 @@ function LiveLinkModal({ matchLabel, matchId, legId, onLinked, onClose }) {
         {liveMatches === null ? (
           <p className="hint-text">Laden…</p>
         ) : liveMatches.length === 0 ? (
-          <p className="hint-text">Nu geen live wedstrijden in je getrackte competities.</p>
+          <p className="hint-text">Geen live of aankomende wedstrijden in je getrackte competities.</p>
         ) : (
           <div className="live-link-modal-list">
             {liveMatches.map((m) => (
@@ -101,7 +103,7 @@ function LiveLinkModal({ matchLabel, matchId, legId, onLinked, onClose }) {
                 <span>
                   {m.home} – {m.away}
                 </span>
-                <span className="badge">{m.league}</span>
+                <span className="badge">{m.scheduled ? `${m.league} · ${formatKickoff(m.kickoff)}` : m.league}</span>
               </button>
             ))}
           </div>
