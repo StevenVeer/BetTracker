@@ -797,7 +797,9 @@ body {
 .field select,
 .field textarea,
 .import-leg input,
-.import-leg-part input {
+.import-leg-part input,
+.import-leg select,
+.import-leg-part select {
   font-family: 'Space Mono', ui-monospace, SFMono-Regular, monospace;
   font-size: 13px;
   padding: 10px 11px;
@@ -808,7 +810,9 @@ body {
   text-transform: none;
   letter-spacing: normal;
 }
-.field select {
+.field select,
+.import-leg select,
+.import-leg-part select {
   /* padding alleen verplaatst de tekst, niet het native browser-pijltje —
      dus dat pijltje uitzetten en zelf tekenen, met echte marge tot de rand. */
   appearance: none;
@@ -824,7 +828,9 @@ body {
 .field select:focus,
 .field textarea:focus,
 .import-leg input:focus,
-.import-leg-part input:focus {
+.import-leg-part input:focus,
+.import-leg select:focus,
+.import-leg-part select:focus {
   outline: none;
   border-color: var(--gold);
 }
