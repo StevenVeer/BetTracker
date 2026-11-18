@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { dayKey, groupByPlacedPeriod } from '../dailyResults.js';
+import { dayKey, groupByPlacedPeriod, periodKey } from '../dailyResults.js';
 import { Amount } from './AmountsToggle.jsx';
 
 const GRANULARITIES = [
@@ -32,6 +32,33 @@ function periodLabel(dateKeyStr, granularity) {
     return `week van ${String(d).padStart(2, '0')}-${String(m).padStart(2, '0')}-${y}`;
   }
   return `${String(d).padStart(2, '0')}-${String(m).padStart(2, '0')}-${y}`;
+}
+
+// Elk zoom-niveau is ook een tijdvenster: Dag = laatste 30 dagen, Week =
+// laatste 12 weken, Maand = laatste 12 maanden (incl. de lopende periode).
+// Curve en kopbedrag gaan alleen over dat venster en starten op 0.
+const WINDOWS = {
+  day: { label: 'laatste 30 dagen', back: (d) => d.setDate(d.getDate() - 29) },
+  week: { label: 'laatste 12 weken', back: (d) => d.setDate(d.getDate() - 7 * 11) },
+  month: { label: 'laatste 12 maanden', back: (d) => d.setMonth(d.getMonth() - 11, 1) },
+};
+
+function windowStartKey(granularity) {
+  const d = new Date();
+  WINDOWS[granularity].back(d);
+  return periodKey(d, granularity);
+}
+
+// Periodes binnen het venster, met de cumulatieve stand opnieuw vanaf 0.
+function windowPeriods(periods, granularity) {
+  const startKey = windowStartKey(granularity);
+  let cumulative = 0;
+  return periods
+    .filter((p) => p.date >= startKey)
+    .map((p) => {
+      cumulative += p.result;
+      return { ...p, cumulative };
+    });
 }
 
 // Synthetisch startpunt op 0, ruim vóór het eerste echte punt, zodat de
@@ -78,9 +105,13 @@ export default function EquityCurve({ bets }) {
   // Alleen afgeronde bets: een nog-open bet telt in groupByPlacedPeriod als
   // volledig verloren inzet (winst 0) en zou de curve onterecht laten dalen.
   const settled = bets.filter((b) => b.status !== 'open');
-  const periods = groupByPlacedPeriod(settled, granularity);
+  const allPeriods = groupByPlacedPeriod(settled, granularity);
+  const allTimeTotal = allPeriods.length > 0 ? allPeriods[allPeriods.length - 1].cumulative : 0;
+  const periods = windowPeriods(allPeriods, granularity);
   const series = buildSeries(periods, granularity);
   const hasData = series.length > 0;
+  const hasAnyData = allPeriods.length > 0;
+  const windowLabel = WINDOWS[granularity].label;
 
   const total = hasData ? series[series.length - 1].cum : 0;
   const positive = total >= 0;
@@ -98,11 +129,11 @@ export default function EquityCurve({ bets }) {
       <div className="equity-head">
         <div className="equity-title">
           <p className="eyebrow">Equity curve</p>
-          {hasData && (
+          {hasAnyData && (
             <>
               <div className={`equity-total mono ${positive ? 'profit-positive' : 'profit-negative'}`}>{signed(total)}</div>
               <span className="equity-sub">
-                {periodLabel(periods[0].date, granularity)} — {periodLabel(periods[periods.length - 1].date, granularity)}
+                {windowLabel} · totaal {signed(allTimeTotal)}
               </span>
             </>
           )}
@@ -172,12 +203,14 @@ export default function EquityCurve({ bets }) {
               </div>
             )}
             <div className="equity-axis">
-              <span>{periodLabel(series[0].date, granularity)}</span>
-              <span>{periodLabel(series[series.length - 1].date, granularity)}</span>
+              <span>{periodLabel(windowStartKey(granularity), granularity)}</span>
+              <span>{periodLabel(periodKey(new Date(), granularity), granularity)}</span>
             </div>
           </div>
         ) : (
-          <div className="equity-empty">Nog geen afgehandelde bets voor deze bron.</div>
+          <div className="equity-empty">
+            {hasAnyData ? `Geen afgehandelde bets in de ${windowLabel}.` : 'Nog geen afgehandelde bets voor deze bron.'}
+          </div>
         ))}
     </div>
   );

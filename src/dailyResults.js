@@ -43,7 +43,7 @@ function monthKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
-function periodKey(date, granularity) {
+export function periodKey(date, granularity) {
   if (granularity === 'month') return monthKey(date);
   if (granularity === 'week') return weekKey(date);
   return dayKey(date);
