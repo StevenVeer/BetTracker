@@ -9,6 +9,7 @@ import { getMatchDetail } from './matchDetail.js';
 import { LEAGUES } from './leagues.js';
 import { extractBetsFromImages, extractBetsFromText } from './screenshotImport.js';
 import { applyEarlyPayout } from './earlyPayout.js';
+import { legPieces, MARKET_LABELS } from './marketClassifier.js';
 
 // Personal, single-user tool — not meant to be exposed publicly.
 // There is intentionally no login/auth on any of these routes.
@@ -1188,34 +1189,13 @@ app.delete('/api/corrections/:id', async (req, res) => {
 //            geprijsde beslissende legs × 100
 // Hitrate telt gewoon alle beslissende legs, single én combi. Open en void
 // legs zeggen niets over marktprestatie en tellen nergens in mee.
-// correct_score/anders hebben vrije-tekst selecties (geen vaste opties uit
-// markets.js) - die worden gewoon op de letterlijke tekst gegroepeerd, net
-// als elke andere markt. Bij herhaalde identieke tekst (bv. steeds "2-1")
-// vallen ze samen; verder los, zodat niks wegverstopt zit onder één rij.
+// De markt per pick komt uit marketClassifier.js: vrije tekst van imports
+// ("Reguliere Speeltijd: Roma") wordt daar alsnog ingedeeld, bet builders en
+// tekst-combi's worden per onderdeel opgesplitst. Onderdelen hebben geen
+// eigen odds: ze tellen mee in de hitrate, niet in de yield.
+// Wat niet herkend wordt blijft onder 'anders', op de letterlijke tekst.
 // ---------------------------------------------------------------------------
-const FREE_TEXT_MARKETS = new Set(['correct_score', 'anders']);
-
-const MARKET_LABELS = {
-  team_wint: 'Team wint',
-  dubbelkans: 'Dubbele kans',
-  btts: 'Beide teams scoren',
-  over_under: 'Over/onder doelpunten',
-  handicap: 'Handicap',
-  correct_score: 'Correcte score',
-  anders: 'Anders',
-};
-
-const SELECTION_LABELS = {
-  team_wint: { home: 'Thuis wint', away: 'Uit wint' },
-  dubbelkans: { home_draw: 'Thuis of gelijk', home_away: 'Thuis of uit', draw_away: 'Gelijk of uit' },
-  btts: { yes: 'Ja', no: 'Nee' },
-  over_under: { over: 'Over', under: 'Onder' },
-  handicap: { home: 'Thuisteam', away: 'Uitteam' },
-};
-
-function marketSelectionLabel(market, selectionKey) {
-  return SELECTION_LABELS[market]?.[selectionKey] || selectionKey;
-}
+const FREE_TEXT_MARKETS = new Set(['anders']);
 
 function computeMarketRow(g) {
   const totalLegs = g.singles + g.combi;
@@ -1233,8 +1213,8 @@ function computeMarketRow(g) {
 async function buildMarketOverview() {
   const bets = await fetchBetsWithLegs("where source = 'manual'", []);
 
-  const groups = new Map(); // market -> Map(selectionKey -> { singles, combi, won, pricedLegs, yieldSum, picks })
-  function getGroup(market, selectionKey) {
+  const groups = new Map(); // market -> Map(selectionKey -> { label, singles, combi, won, pricedLegs, yieldSum, picks })
+  function getGroup(market, selectionKey, label) {
     let marketMap = groups.get(market);
     if (!marketMap) {
       marketMap = new Map();
@@ -1242,7 +1222,7 @@ async function buildMarketOverview() {
     }
     let g = marketMap.get(selectionKey);
     if (!g) {
-      g = { singles: 0, combi: 0, won: 0, pricedLegs: 0, yieldSum: 0, picks: [] };
+      g = { label, singles: 0, combi: 0, won: 0, pricedLegs: 0, yieldSum: 0, picks: [] };
       marketMap.set(selectionKey, g);
     }
     return g;
@@ -1251,21 +1231,29 @@ async function buildMarketOverview() {
   for (const bet of bets) {
     const isSingle = bet.legs.length === 1;
     for (const leg of bet.legs) {
-      if (leg.status !== 'won' && leg.status !== 'lost') continue;
-      const g = getGroup(leg.market, leg.selection);
-      if (isSingle) g.singles += 1;
-      else g.combi += 1;
-      if (leg.status === 'won') g.won += 1;
-      g.pricedLegs += 1;
-      g.yieldSum += leg.status === 'won' ? Number(leg.odds) - 1 : -1;
-      g.picks.push({
-        legId: leg.id,
-        label: leg.match ? `${leg.match.home} – ${leg.match.away}` : leg.manualLabel || 'Handmatige selectie',
-        bookmaker: bet.bookmaker,
-        isCombi: !isSingle,
-        odds: Number(leg.odds),
-        status: leg.status,
-        placedAt: bet.placedAt,
+      const pieces = legPieces(leg);
+      pieces.forEach((piece, i) => {
+        const g = getGroup(piece.market, piece.key, piece.label);
+        // Een onderdeel van een bet builder is altijd deel van een combinatie.
+        const pieceIsSingle = isSingle && piece.priced;
+        if (pieceIsSingle) g.singles += 1;
+        else g.combi += 1;
+        if (piece.status === 'won') g.won += 1;
+        if (piece.priced) {
+          g.pricedLegs += 1;
+          g.yieldSum += piece.status === 'won' ? Number(leg.odds) - 1 : -1;
+        }
+        g.picks.push({
+          legId: pieces.length > 1 ? `${leg.id}:${i}` : leg.id,
+          label: leg.match ? `${leg.match.home} – ${leg.match.away}` : leg.manualLabel || 'Handmatige selectie',
+          pick: piece.pickText,
+          bookmaker: bet.bookmaker,
+          isCombi: !pieceIsSingle,
+          isPart: !piece.priced,
+          odds: piece.priced ? Number(leg.odds) : null,
+          status: piece.status,
+          placedAt: bet.placedAt,
+        });
       });
     }
   }
@@ -1278,7 +1266,7 @@ async function buildMarketOverview() {
       const selections = [...selectionMap.entries()]
         .map(([selectionKey, g]) => ({
           key: selectionKey,
-          label: marketSelectionLabel(marketKey, selectionKey),
+          label: g.label,
           ...computeMarketRow(g),
           picks: g.picks.slice().sort((a, b) => new Date(b.placedAt) - new Date(a.placedAt)),
         }))
@@ -1295,7 +1283,8 @@ async function buildMarketOverview() {
       );
       return { key: marketKey, label: MARKET_LABELS[marketKey] || marketKey, freeform, selections, ...computeMarketRow(agg) };
     })
-    .sort((a, b) => marketRoiFallback(b) - marketRoiFallback(a));
+    // 'Anders' is een restbak, geen markt: altijd onderaan.
+    .sort((a, b) => (a.key === 'anders') - (b.key === 'anders') || marketRoiFallback(b) - marketRoiFallback(a));
 
   const totalLegs = markets.reduce((sum, m) => sum + m.totalLegs, 0);
   return { markets, totalLegs };

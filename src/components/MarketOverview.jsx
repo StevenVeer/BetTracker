@@ -63,8 +63,10 @@ export default function MarketOverview() {
   }
 
   const markets = data?.markets || [];
-  const confident = markets.filter((m) => !isLowSample(m));
-  const rankedForBestWorst = confident.length > 0 ? confident : markets;
+  // 'Anders' is een restbak van losse selecties, geen markt om op te sturen.
+  const realMarkets = markets.filter((m) => m.key !== 'anders');
+  const confident = realMarkets.filter((m) => !isLowSample(m));
+  const rankedForBestWorst = confident.length > 0 ? confident : realMarkets.length > 0 ? realMarkets : markets;
   const best = rankedForBestWorst[0];
   const worst = rankedForBestWorst.length > 1 ? rankedForBestWorst[rankedForBestWorst.length - 1] : null;
 
@@ -161,12 +163,15 @@ export default function MarketOverview() {
                                     <div className="leg-row" key={pick.legId}>
                                       <div className="leg-info">
                                         <span className="leg-match">{pick.label}</span>
+                                        {pick.pick && <span className="muted">{pick.pick}</span>}
                                         <span className="muted">
                                           {pick.bookmaker} · {formatDate(pick.placedAt)}
-                                          {pick.isCombi ? ' · combi' : ''}
+                                          {pick.isPart ? ' · onderdeel van combi' : pick.isCombi ? ' · combi' : ''}
                                         </span>
                                       </div>
-                                      <span className="leg-odds">@ {pick.odds.toFixed(2)}</span>
+                                      <span className="leg-odds" title={pick.odds === null ? 'Onderdeel zonder eigen odds - telt niet mee in de yield' : undefined}>
+                                        {pick.odds === null ? '—' : `@ ${pick.odds.toFixed(2)}`}
+                                      </span>
                                       <span className={`leg-status leg-status-${pick.status}`}>{STATUS_LABELS[pick.status]}</span>
                                     </div>
                                   ))}
@@ -189,6 +194,10 @@ export default function MarketOverview() {
             <br />
             <b>S</b> = single · <b>C</b> = combi-leg. Hitrate telt alle legs, single én combi; Gesorteerd op yield
             (aflopend).
+            <br />
+            Bet builders en gecombineerde selecties ("X + Y") tellen per onderdeel in hun eigen markt. Onderdelen hebben geen eigen
+            odds: ze tellen mee in de hitrate, niet in de yield. Een onderdeel zonder uitslag in een verloren combi telt niet mee
+            (onbekend of dát onderdeel verloor).
             <br />
             Rijen met minder dan {MIN_SAMPLE} legs (badge <b>n=…</b>) zijn gedempt — te weinig data voor een betrouwbaar signaal, en ze
             tellen niet mee voor "beste/slechtste markt" hierboven.
