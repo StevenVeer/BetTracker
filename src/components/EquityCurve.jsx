@@ -96,6 +96,33 @@ function buildChart(points, w, h, pad) {
 const CHART_W = 1320;
 const CHART_H = 200;
 const CHART_PAD = 14;
+const BARS_H = 70;
+const BARS_PAD = 4;
+
+// Staafjes met het resultaat per periode, op dezelfde x-posities als de
+// punten van de curve. Eigen schaal (grootste uitschieter = volle hoogte);
+// de nullijn ligt zo dat zowel winst- als verliesstaafjes passen.
+function buildBars(points, coords, h) {
+  const results = points.map((p) => p.result);
+  const max = Math.max(0, ...results);
+  const min = Math.min(0, ...results);
+  const range = max - min || 1;
+  const scaleY = (v) => h - BARS_PAD - ((v - min) / range) * (h - BARS_PAD * 2);
+  const zeroY = scaleY(0);
+  const step = coords.length > 1 ? coords[1].x - coords[0].x : CHART_W;
+  const w = Math.max(2, Math.min(28, step * 0.6));
+  const items = points.map((p) => {
+    const y = scaleY(p.result);
+    return {
+      x: p.x - w / 2,
+      y: Math.min(y, zeroY),
+      w,
+      h: Math.max(1, Math.abs(zeroY - y)),
+      positive: p.result >= 0,
+    };
+  });
+  return { items, zeroY };
+}
 
 export default function EquityCurve({ bets }) {
   const [granularity, setGranularity] = useState('day');
@@ -122,6 +149,7 @@ export default function EquityCurve({ bets }) {
   // echte datapunten (1..n) zijn hoverbaar.
   const realPoints = hasData ? series.slice(1).map((p, i) => ({ ...p, ...chart.coords[i + 1] })) : [];
   const hovered = hoverIndex !== null ? realPoints[hoverIndex] : null;
+  const bars = hasData ? buildBars(realPoints, chart.coords, BARS_H) : null;
   const gradientId = 'equityFill';
 
   return (
@@ -166,6 +194,7 @@ export default function EquityCurve({ bets }) {
 
       {!collapsed &&
         (hasData ? (
+          <div>
           <div className="equity-chart-wrap">
             <svg className="equity-chart" viewBox={`0 0 ${CHART_W} ${CHART_H}`} preserveAspectRatio="none">
               <defs>
@@ -202,6 +231,25 @@ export default function EquityCurve({ bets }) {
                 <div className="equity-tooltip-period mono">{signed(hovered.result)} dit venster</div>
               </div>
             )}
+          </div>
+            <svg className="equity-bars" viewBox={`0 0 ${CHART_W} ${BARS_H}`} preserveAspectRatio="none">
+              <line x1="0" y1={bars.zeroY} x2={CHART_W} y2={bars.zeroY} stroke="rgba(244,242,232,0.18)" strokeWidth="1" />
+              {bars.items.map((b, i) => (
+                <rect
+                  key={i}
+                  x={b.x}
+                  y={b.y}
+                  width={b.w}
+                  height={b.h}
+                  rx="2"
+                  fill={b.positive ? 'var(--win-text)' : 'var(--loss-text)'}
+                  opacity={hoverIndex === null || hoverIndex === i ? 0.85 : 0.35}
+                  style={{ cursor: 'pointer' }}
+                  onMouseEnter={() => setHoverIndex(i)}
+                  onMouseLeave={() => setHoverIndex((cur) => (cur === i ? null : cur))}
+                />
+              ))}
+            </svg>
             <div className="equity-axis">
               <span>{periodLabel(windowStartKey(granularity), granularity)}</span>
               <span>{periodLabel(periodKey(new Date(), granularity), granularity)}</span>

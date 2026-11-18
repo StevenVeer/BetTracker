@@ -2714,6 +2714,12 @@ body {
   height: 200px;
   display: block;
 }
+.equity-bars {
+  width: 100%;
+  height: 70px;
+  display: block;
+  margin-top: 8px;
+}
 .equity-axis {
   display: flex;
   justify-content: space-between;
