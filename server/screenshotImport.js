@@ -4,6 +4,14 @@
 // bevestigt.
 
 import { applyEarlyPayout } from './earlyPayout.js';
+import { MARKET_LABELS, isCategory } from './marketClassifier.js';
+
+const CATEGORY_SCHEMA = {
+  type: ['string', 'null'],
+  enum: [...Object.keys(MARKET_LABELS), null],
+  description:
+    'Marktcategorie van deze selectie: team_wint (eindresultaat/1X2 incl. gelijkspel, 2UP), dubbelkans, btts (beide teams scoren), over_under (doelpunten in de hele wedstrijd), team_totals (doelpunten van één team), handicap (incl. 3-weg handicap, draw no bet), correct_score, speler_scoort (incl. eerste doelpuntenmaker), speler_schoten (schoten/schoten op doel van een speler), speler_assist (incl. scoort of geeft assist), anders (alles wat hier niet in past, bv. keeperreddingen, kaarten, corners, kwalificatie). Bij een bet builder met parts: null op de leg, de categorie per onderdeel.',
+};
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
@@ -38,6 +46,7 @@ const EXTRACT_TOOL = {
                   away: { type: ['string', 'null'], description: 'Uitteam/speler 2.' },
                   selection: { type: 'string', description: 'De gekozen uitkomst letterlijk zoals op de slip, inclusief markt en teamnaam (bv. "Reguliere speeltijd: Engeland", "Eerste doelpuntenmaker: Harry Kane", "Beide teams scoren: Ja"). Niet herformuleren of vertalen, zodat er nooit een verkeerd team in komt; alleen vertalen als de slip niet in het Nederlands is.' },
                   odds: { type: ['number', 'null'], description: 'Odds van deze selectie (bij een bet builder de gezamenlijke odd).' },
+                  category: CATEGORY_SCHEMA,
                   parts: {
                     type: ['array', 'null'],
                     description: 'Alleen bij een bet builder (meerdere selecties op deze wedstrijd met één gezamenlijke odd): de losse onderdelen, in de volgorde van de slip. Anders null.',
@@ -46,6 +55,7 @@ const EXTRACT_TOOL = {
                       properties: {
                         market: { type: ['string', 'null'], description: 'De markt letterlijk zoals op de slip (bv. "Aantal Goals - Over/Under 2.5", "Beide Teams Scoren"), of null als alleen de keuze zichtbaar is.' },
                         pick: { type: 'string', description: 'De gekozen uitkomst letterlijk zoals op de slip (bv. "Over 2.5", "Ja").' },
+                        category: CATEGORY_SCHEMA,
                       },
                       required: ['pick'],
                     },
@@ -73,6 +83,7 @@ const SYSTEM_PROMPT = `Je leest screenshots of de platte tekst van een pagina me
 - Bet builder / meerdere selecties op dezelfde wedstrijd met alleen een gezamenlijke odd: maak daar één leg van met de gezamenlijke odd als odds, en zet ELK los onderdeel (markt + keuze) apart in parts, ook als de slip ze onder één kopje "Bet builder" toont. Zet in selection de onderdelen samengevoegd met " + " (bv. "Beide teams scoren: Ja + Meer dan 2.5 doelpunten"), nooit alleen het woord "Bet builder". Zijn de losse onderdelen niet zichtbaar (ingeklapt), geef dan parts null en selection een lege string. Ook binnen een combi is een bet builder één leg. Dit geldt ook als er geen kopje "Bet builder" staat: selecties op dezelfde wedstrijd onder elkaar zonder eigen odds per selectie zijn samen één leg, geen losse legs.
 - Ontbreekt in een combi precies één leg-odd en is er geen boost, leid die dan af als totale odds gedeeld door het product van de andere legs (2 decimalen) en zet dat in note. Bij een boost (totaal hoger dan het product) of als meer odds ontbreken: laat ze null.
 - Krijg je een lijst met bekende bets, sla die dan over: registreer ze niet (ook niet als de status inmiddels veranderd is) en tel ze in skippedKnown. Een bet is bekend als het coupon-nummer overeenkomt, of anders inzet + totale odds + wedstrijden.
+- Geef elke selectie (en bij een bet builder elk onderdeel) een category. Let op het verschil tussen doelpunten van de hele wedstrijd (over_under) en van één team (team_totals), en tussen een speler die scoort (speler_scoort) en schoten van een speler (speler_schoten). Twijfel je, kies dan anders.
 - Vul payout altijd in zodra er een uitbetaal-/te-winnen-bedrag zichtbaar is, ook bij een bet die nog open staat.
 - Lees bedragen en odds exact over (decimale odds, punt als scheidingsteken).
 - De huidige datum is ${new Date().toISOString().slice(0, 10)}; gebruik die om een jaar af te leiden als alleen dag/maand zichtbaar is.
@@ -163,7 +174,17 @@ async function runExtraction(content) {
   // de preview in de importmodal al de EP-markering toont.
   const cleaned = (Array.isArray(bets) ? bets : []).map((bet) => ({
     ...bet,
-    legs: Array.isArray(bet?.legs) ? bet.legs.map((leg) => applyEarlyPayout(leg || {})) : bet?.legs,
+    legs: Array.isArray(bet?.legs)
+      ? bet.legs.map((leg) => {
+          const out = applyEarlyPayout(leg || {});
+          // Onbekende categorie (model wijkt af van de enum) = automatisch afleiden.
+          return {
+            ...out,
+            category: isCategory(leg?.category) ? leg.category : null,
+            parts: Array.isArray(out.parts) ? out.parts.map((p) => ({ ...p, category: isCategory(p?.category) ? p.category : null })) : out.parts,
+          };
+        })
+      : bet?.legs,
   }));
   return { bets: cleaned, skippedKnown: Number(toolUse?.input?.skippedKnown) || 0 };
 }

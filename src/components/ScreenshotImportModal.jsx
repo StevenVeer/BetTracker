@@ -3,6 +3,21 @@ import { api } from '../api.js';
 import DecimalInput from './DecimalInput.jsx';
 import InlineIcon from './InlineIcon.jsx';
 import { EarlyPayoutToggle } from './EarlyPayoutBadge.jsx';
+import { MARKET_CATEGORIES } from '../markets.js';
+
+// Marktcategorie voor het marktoverzicht; leeg = automatisch uit de tekst.
+function CategorySelect({ value, onChange }) {
+  return (
+    <select value={value || ''} onChange={(e) => onChange(e.target.value)} title="Markt (voor het marktoverzicht)" aria-label="Markt">
+      <option value="">Markt: automatisch</option>
+      {MARKET_CATEGORIES.map((c) => (
+        <option key={c.key} value={c.key}>
+          {c.label}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 const MAX_DIMENSION = 1600;
 const STATUS_OPTIONS = [
@@ -132,7 +147,7 @@ function mergeSameMatchLegs(legs) {
   return [...groups.values()].flatMap((group) => {
     if (group.length === 1) return group;
     const odds = new Set(group.filter(hasOdds).map((leg) => Number(leg.odds)));
-    const parts = group.flatMap((leg) => (isBetBuilder(leg) ? leg.parts : [selectionToPart(leg.selection)]));
+    const parts = group.flatMap((leg) => (isBetBuilder(leg) ? leg.parts : [{ ...selectionToPart(leg.selection), category: leg.category }]));
     if (odds.size > 1 || parts.some((part) => !part.pick)) return group;
     return [
       {
@@ -141,6 +156,7 @@ function mergeSameMatchLegs(legs) {
         odds: group.find(hasOdds)?.odds ?? '',
         kickoffAt: group.find((leg) => leg.kickoffAt)?.kickoffAt ?? '',
         parts,
+        category: '',
         earlyPayout: group.some((leg) => leg.earlyPayout),
       },
     ];
@@ -172,7 +188,7 @@ function toDraft(bet, bookmakers) {
     // als al aanwezig.
     notes: [bet.couponId && `Coupon ${bet.couponId}`, bet.note].filter(Boolean).join(' - '),
     legs: mergeSameMatchLegs((bet.legs || []).map((leg) => {
-      const parts = (leg.parts || []).map((part) => ({ market: part.market || '', pick: part.pick || '' }));
+      const parts = (leg.parts || []).map((part) => ({ market: part.market || '', pick: part.pick || '', category: part.category || '' }));
       // Geeft het model alleen het kopje "Bet builder" met minder dan twee
       // onderdelen, dan toont de preview het ene onderdeel (of een leeg veld
       // dat ingevuld moet worden) in plaats van dat kopje op te slaan.
@@ -184,6 +200,8 @@ function toDraft(bet, bookmakers) {
         odds: leg.odds != null ? String(leg.odds) : '',
         kickoffAt: toLocalInput(leg.kickoffAt),
         parts: parts.length > 1 ? parts : [],
+        // Eén los onderdeel wordt de selectie zelf: dan geldt zijn categorie.
+        category: leg.category || (parts.length === 1 ? parts[0].category : '') || '',
         earlyPayout: Boolean(leg.earlyPayout),
       };
     })),
@@ -396,7 +414,10 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
             manualLabel: [leg.home.trim(), leg.away.trim()].filter(Boolean).join(' - '),
             market: 'anders',
             selection: legSelection(leg),
-            parts: isBetBuilder(leg) ? leg.parts.map((part) => ({ market: part.market.trim() || null, pick: part.pick.trim() })) : undefined,
+            parts: isBetBuilder(leg)
+              ? leg.parts.map((part) => ({ market: part.market.trim() || null, pick: part.pick.trim(), category: part.category || null }))
+              : undefined,
+            category: isBetBuilder(leg) ? null : leg.category || null,
             odds: Number(leg.odds),
             // Aftrap bepaalt de geschatte afhandeltijd (einde laatste wedstrijd).
             kickoffAt: leg.kickoffAt ? new Date(leg.kickoffAt).toISOString() : undefined,
@@ -598,6 +619,7 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
                         ) : (
                           <input placeholder="Selectie" value={leg.selection} onChange={(e) => updateLeg(i, j, { selection: e.target.value })} />
                         )}
+                        {isBetBuilder(leg) ? <span /> : <CategorySelect value={leg.category} onChange={(category) => updateLeg(i, j, { category })} />}
                         <DecimalInput
                           className="import-leg-odds"
                           placeholder="Odds"
@@ -617,6 +639,7 @@ export default function ScreenshotImportModal({ onClose, onCreated, pageImportId
                             <div className="import-leg-part" key={k}>
                               <input placeholder="Markt" value={part.market} onChange={(e) => updatePart(i, j, k, { market: e.target.value })} />
                               <input placeholder="Keuze" value={part.pick} onChange={(e) => updatePart(i, j, k, { pick: e.target.value })} />
+                              <CategorySelect value={part.category} onChange={(category) => updatePart(i, j, k, { category })} />
                               <button type="button" className="import-part-delete" aria-label="Onderdeel verwijderen" title="Onderdeel verwijderen" onClick={() => removePart(i, j, k)}>
                                 <InlineIcon name="trash" size={16} />
                               </button>

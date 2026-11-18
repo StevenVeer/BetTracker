@@ -74,6 +74,10 @@ export function ensureSchema() {
       alter table bet_legs add column if not exists parts jsonb;
       -- Vroege uitbetaling (zie earlyPayout.js): vlag i.p.v. tekst in selection.
       alter table bet_legs add column if not exists early_payout boolean not null default false;
+      -- Marktcategorie voor het marktoverzicht (zie marketClassifier.js), los
+      -- van market: die blijft bepalen of een leg automatisch settelt. null =
+      -- afleiden uit de tekst.
+      alter table bet_legs add column if not exists category text;
       -- Daadwerkelijk uitbetaald cash-outbedrag, los van potential_payout zodat
       -- de oorspronkelijke mogelijke uitbetaling zichtbaar blijft. Oudere
       -- cash-outs hadden het bedrag ín potential_payout staan: eenmalig

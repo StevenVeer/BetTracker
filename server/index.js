@@ -9,7 +9,7 @@ import { getMatchDetail } from './matchDetail.js';
 import { LEAGUES } from './leagues.js';
 import { extractBetsFromImages, extractBetsFromText } from './screenshotImport.js';
 import { applyEarlyPayout } from './earlyPayout.js';
-import { legPieces, MARKET_LABELS } from './marketClassifier.js';
+import { legPieces, MARKET_LABELS, isCategory } from './marketClassifier.js';
 
 // Personal, single-user tool — not meant to be exposed publicly.
 // There is intentionally no login/auth on any of these routes.
@@ -166,6 +166,7 @@ function serializeLeg(row) {
     kickoffAt: row.kickoff_at || null,
     parts: row.parts || null,
     earlyPayout: Boolean(row.early_payout),
+    category: row.category || null,
     match: row.match_id
       ? {
           id: row.match_id,
@@ -182,12 +183,16 @@ function serializeLeg(row) {
   };
 }
 
-// Bet builder-onderdelen opschonen tot [{ market, pick }] als JSON-tekst, of
-// null als er minder dan twee bruikbare onderdelen zijn.
+// Bet builder-onderdelen opschonen tot [{ market, pick, category? }] als
+// JSON-tekst, of null als er minder dan twee bruikbare onderdelen zijn.
 function normalizeParts(parts) {
   if (!Array.isArray(parts)) return null;
   const clean = parts
-    .map((part) => ({ market: String(part?.market || '').trim() || null, pick: String(part?.pick || '').trim() }))
+    .map((part) => {
+      const out = { market: String(part?.market || '').trim() || null, pick: String(part?.pick || '').trim() };
+      if (isCategory(part?.category)) out.category = part.category;
+      return out;
+    })
     .filter((part) => part.pick);
   return clean.length >= 2 ? JSON.stringify(clean) : null;
 }
@@ -347,9 +352,9 @@ app.post('/api/bets', async (req, res) => {
       const matchId = await upsertMatch(leg.match);
       const kickoffAt = !matchId && leg.kickoffAt && !Number.isNaN(new Date(leg.kickoffAt).getTime()) ? new Date(leg.kickoffAt) : null;
       await pool.query(
-        `insert into bet_legs (id, bet_id, position, match_id, manual_label, market, selection, line, odds, status, kickoff_at, parts, early_payout)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open', $10, $11, $12)`,
-        [randomUUID(), id, position, matchId, matchId ? null : leg.manualLabel, leg.market, leg.selection, leg.line ?? null, leg.odds, kickoffAt, normalizeParts(leg.parts), leg.earlyPayout]
+        `insert into bet_legs (id, bet_id, position, match_id, manual_label, market, selection, line, odds, status, kickoff_at, parts, early_payout, category)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open', $10, $11, $12, $13)`,
+        [randomUUID(), id, position, matchId, matchId ? null : leg.manualLabel, leg.market, leg.selection, leg.line ?? null, leg.odds, kickoffAt, normalizeParts(leg.parts), leg.earlyPayout, isCategory(rawLeg.category) ? rawLeg.category : null]
       );
       position += 1;
     }
@@ -1253,6 +1258,7 @@ async function buildMarketOverview() {
           odds: piece.priced ? Number(leg.odds) : null,
           status: piece.status,
           placedAt: bet.placedAt,
+          edit: piece.edit,
         });
       });
     }
@@ -1289,6 +1295,69 @@ async function buildMarketOverview() {
   const totalLegs = markets.reduce((sum, m) => sum + m.totalLegs, 0);
   return { markets, totalLegs };
 }
+
+// Handmatig de marktcategorie (en bij vrije tekst de titel) van een leg of
+// van één bet builder-onderdeel aanpassen, vanuit het marktoverzicht.
+// category null = weer automatisch afleiden uit de tekst. bet_legs.market
+// blijft ongemoeid (settlement), de titel alleen bij 'anders'-legs: bij een
+// vaste markt is selection een sleutel als 'home'.
+app.patch('/api/bet-legs/:id/category', async (req, res) => {
+  const { id } = req.params;
+  const { partIndex = null, category, title } = req.body;
+  if (category !== null && category !== undefined && !isCategory(category)) {
+    res.status(400).json({ error: 'Onbekende markt' });
+    return;
+  }
+  const newTitle = typeof title === 'string' ? title.trim() : undefined;
+  if (title !== undefined && !newTitle) {
+    res.status(400).json({ error: 'Titel mag niet leeg zijn' });
+    return;
+  }
+  try {
+    const { rows } = await pool.query('select market, selection, parts, category from bet_legs where id = $1', [id]);
+    const leg = rows[0];
+    if (!leg) {
+      res.status(404).json({ error: 'Selectie niet gevonden' });
+      return;
+    }
+    if (partIndex !== null) {
+      const parts = Array.isArray(leg.parts) ? leg.parts.map((p) => ({ ...p })) : null;
+      if (!parts || !Number.isInteger(partIndex) || !parts[partIndex]) {
+        res.status(400).json({ error: 'Onderdeel niet gevonden' });
+        return;
+      }
+      const part = parts[partIndex];
+      if (category !== undefined) {
+        if (category) part.category = category;
+        else delete part.category;
+      }
+      // De titel is "markt: keuze" in één tekst; die gaat helemaal in pick.
+      if (newTitle !== undefined) {
+        part.market = null;
+        part.pick = newTitle;
+      }
+      const partText = (p) => [p.market, p.pick].filter(Boolean).join(': ');
+      await pool.query('update bet_legs set parts = $2, selection = $3 where id = $1', [
+        id,
+        JSON.stringify(parts),
+        `${parts.map(partText).join(' + ')} (bet builder)`,
+      ]);
+    } else {
+      if (newTitle !== undefined && leg.market !== 'anders') {
+        res.status(400).json({ error: 'De titel van een vaste markt is niet aan te passen' });
+        return;
+      }
+      await pool.query('update bet_legs set category = $2, selection = $3 where id = $1', [
+        id,
+        category === undefined ? leg.category : category,
+        newTitle ?? leg.selection,
+      ]);
+    }
+    res.json(await buildMarketOverview());
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 app.get('/api/markets/overview', async (req, res) => {
   try {

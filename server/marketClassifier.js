@@ -26,6 +26,8 @@ export const MARKET_LABELS = {
   anders: 'Anders',
 };
 
+export const isCategory = (value) => typeof value === 'string' && Object.hasOwn(MARKET_LABELS, value);
+
 const NUM = String.raw`(\d+(?:[.,]\d+)?)`;
 const toNum = (s) => Number(String(s).replace(',', '.'));
 const fmtLine = (n) => (Number.isInteger(n) ? n.toFixed(1) : String(n));
@@ -100,6 +102,7 @@ function playerFromScorer(t) {
   let m;
   if ((m = t.match(/(?:scoort|doelpuntenmaker|speler scoort)[^:]*:\s*(.+?)(?:\s+-\s+(?:ja|nee))?$/i))) return m[1];
   if ((m = t.match(/^(.+?)\s+scoort\b/i))) return m[1];
+  if ((m = t.match(/^([^:]+?)\s+-\s+(?:meer|minder) dan/i))) return m[1];
   return null;
 }
 
@@ -109,7 +112,9 @@ function playerFromShots(t) {
   if ((m = t.match(/schoten op doel:\s*(.+?):\s*\d\+/i))) return m[1];
   if ((m = t.match(/^schoten\s+(.+?):/i))) return m[1];
   if ((m = t.match(/^(.+?)\s*:?\s+(?:-\s+meer dan [\d.]+\s+schoten|\d\+ schot|aantal schoten)/i))) return m[1];
-  if ((m = t.match(/(?:-|:)\s*([^:-]+)$/))) return m[1];
+  // Handmatig ingedeeld "Christopher Nkunku - Meer dan 0.5"
+  if ((m = t.match(/^([^:]+?)\s+-\s+(?:meer|minder) dan/i))) return m[1];
+  if ((m = t.match(/(?:-|:)\s*([^:-]+)$/)) && !/^(meer|minder) dan|^\d/i.test(m[1].trim())) return m[1];
   return null;
 }
 
@@ -117,6 +122,7 @@ function playerFromAssist(t) {
   let m;
   if ((m = t.match(/\):\s*(.+?)\s+-\s+(?:ja|nee)$/i))) return m[1];
   if ((m = t.match(/assists?:\s*(.+)$/i))) return m[1];
+  if ((m = t.match(/^([^:]+?)\s+-\s+(?:meer|minder) dan/i))) return m[1];
   return null;
 }
 
@@ -206,6 +212,41 @@ export function classifyText(rawText, match) {
   return res('anders', t, text);
 }
 
+// Tekst met een vaststaande categorie (gekozen bij import of handmatig).
+// Komt de tekstherkenning op dezelfde markt uit, dan nemen we die groepering
+// over; anders groeperen we binnen de gekozen markt zo goed als het gaat.
+export function classifyAs(category, rawText, match) {
+  const guess = classifyText(rawText, match);
+  if (guess.market === category) return guess;
+  const text = clean(rawText);
+  const ou = parseOverUnder(text);
+  switch (category) {
+    case 'speler_scoort': {
+      const p = playerKey(playerFromScorer(text), text);
+      return res(category, p.key, p.label);
+    }
+    case 'speler_schoten': {
+      const p = playerKey(playerFromShots(text), text);
+      return res(category, p.key, p.label);
+    }
+    case 'speler_assist': {
+      const p = playerKey(playerFromAssist(text), text);
+      return res(category, p.key, p.label);
+    }
+    case 'over_under':
+    case 'team_totals':
+      return ou ? res(category, `${ou.dir}:${ou.line}`, ouLabel(ou)) : res(category, text.toLowerCase(), text);
+    case 'btts':
+      return /\b(nee|no)\b/i.test(text) ? res(category, 'no', 'Nee') : res(category, 'yes', 'Ja');
+    case 'team_wint':
+      return res(category, 'team', 'Team wint (thuis/uit onbekend)');
+    case 'dubbelkans':
+      return res(category, 'team_draw', 'Team of gelijk (thuis/uit onbekend)');
+    default:
+      return res(category, text.toLowerCase(), text);
+  }
+}
+
 const STRUCTURED_LABELS = {
   team_wint: { home: 'Thuis wint', away: 'Uit wint', draw: 'Gelijkspel' },
   dubbelkans: { home_draw: 'Thuis of gelijk', home_away: 'Thuis of uit', draw_away: 'Gelijk of uit' },
@@ -242,11 +283,16 @@ function splitTextCombo(text, match) {
 }
 
 // Eén leg → de onderdelen waarmee hij in het marktoverzicht meetelt:
-// [{ market, key, label, status, priced, pickText }]. Alleen afgeronde
+// [{ market, key, label, status, priced, pickText, edit }]. Alleen afgeronde
 // (won/lost) onderdelen komen terug. Een losse leg is "priced" (eigen odds,
 // telt mee in de yield); onderdelen van een bet builder of tekst-combi niet,
 // want daar is alleen de gezamenlijke odd bekend.
+// edit beschrijft wat je handmatig kunt aanpassen: de categorie van de leg of
+// van één bet builder-onderdeel (partIndex), en de titel als dat vrije tekst
+// is. Een vaste categorie (leg.category / part.category) wint altijd van de
+// tekstherkenning; een tekst-combi met een vaste categorie splitst niet meer.
 export function legPieces(leg) {
+  const classify = (category, text) => (isCategory(category) ? classifyAs(category, text, leg.match) : classifyText(text, leg.match));
   const legDecided = leg.status === 'won' || leg.status === 'lost';
 
   // Status van een onderdeel zonder eigen uitslag: in een gewonnen leg moet
@@ -259,9 +305,16 @@ export function legPieces(leg) {
 
   if (Array.isArray(leg.parts) && leg.parts.length > 1) {
     return leg.parts
-      .map((part) => {
+      .map((part, partIndex) => {
         const txt = part.market ? `${part.market}: ${part.pick}` : part.pick;
-        return { ...classifyText(txt, leg.match), status: pieceStatus(part.status), priced: false, pickText: clean(txt) };
+        const c = classify(part.category, txt);
+        return {
+          ...c,
+          status: pieceStatus(part.status),
+          priced: false,
+          pickText: clean(txt),
+          edit: { legId: leg.id, partIndex, category: c.market, title: clean(txt), titleEditable: true },
+        };
       })
       .filter((p) => p.status);
   }
@@ -269,15 +322,37 @@ export function legPieces(leg) {
   if (!legDecided) return [];
 
   if (leg.market !== 'anders') {
-    return [{ ...classifyStructured(leg), status: leg.status, priced: true, pickText: leg.selection }];
+    const c = isCategory(leg.category) ? classifyAs(leg.category, leg.selection, leg.match) : classifyStructured(leg);
+    return [
+      {
+        ...c,
+        status: leg.status,
+        priced: true,
+        pickText: leg.selection,
+        // Een vaste markt heeft een selectie-sleutel ('home', 'over'), geen titel.
+        edit: { legId: leg.id, partIndex: null, category: c.market, title: leg.selection, titleEditable: false },
+      },
+    ];
   }
 
-  const combo = splitTextCombo(leg.selection, leg.match);
+  const legEdit = (category) => ({ legId: leg.id, partIndex: null, category, title: clean(leg.selection), titleEditable: true });
+
+  const combo = !isCategory(leg.category) && splitTextCombo(leg.selection, leg.match);
   if (combo) {
     return combo
-      .map((c) => ({ market: c.market, key: c.key, label: c.label, status: pieceStatus(null), priced: false, pickText: c.text }))
+      .map((c) => ({
+        market: c.market,
+        key: c.key,
+        label: c.label,
+        status: pieceStatus(null),
+        priced: false,
+        pickText: c.text,
+        // Aanpassen geldt voor de hele leg (en houdt het splitsen op).
+        edit: { ...legEdit(c.market), wholeLeg: true },
+      }))
       .filter((p) => p.status);
   }
 
-  return [{ ...classifyText(leg.selection, leg.match), status: leg.status, priced: true, pickText: clean(leg.selection) }];
+  const c = classify(leg.category, leg.selection);
+  return [{ ...c, status: leg.status, priced: true, pickText: clean(leg.selection), edit: legEdit(c.market) }];
 }

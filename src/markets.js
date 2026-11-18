@@ -8,6 +8,23 @@ export const MARKETS = [
   { key: 'anders', label: 'Anders' },
 ];
 
+// Categorieën van het marktoverzicht (zie server/marketClassifier.js). Los
+// van MARKETS hierboven: dat zijn de markten die je in het formulier kiest en
+// die de server automatisch kan settelen; een categorie is alleen indeling.
+export const MARKET_CATEGORIES = [
+  { key: 'team_wint', label: 'Team wint' },
+  { key: 'dubbelkans', label: 'Dubbele kans' },
+  { key: 'btts', label: 'Beide teams scoren' },
+  { key: 'over_under', label: 'Over/onder doelpunten' },
+  { key: 'team_totals', label: 'Team totals' },
+  { key: 'handicap', label: 'Handicap' },
+  { key: 'correct_score', label: 'Correcte score' },
+  { key: 'speler_scoort', label: 'Speler scoort' },
+  { key: 'speler_schoten', label: 'Speler schoten op doel' },
+  { key: 'speler_assist', label: 'Speler assist' },
+  { key: 'anders', label: 'Anders' },
+];
+
 // Korte labels voor markten in krappe ruimtes (bv. de live-tab).
 export const MARKET_ABBR = {
   team_wint: 'Winnaar',

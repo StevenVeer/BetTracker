@@ -27,6 +27,8 @@ export const api = {
   getScoresUsage: () => request('/api/scores/usage'),
   getBookmakerOverview: () => request('/api/bookmakers/overview'),
   getMarketOverview: () => request('/api/markets/overview'),
+  // { partIndex, category (null = automatisch), title } → nieuw marktoverzicht
+  updateLegCategory: (legId, patch) => request(`/api/bet-legs/${legId}/category`, { method: 'PATCH', body: JSON.stringify(patch) }),
   exportReport: (period) => request(`/api/reports/export?period=${encodeURIComponent(period)}`),
   getReportNotes: () => request('/api/reports/notes'),
   saveReportNote: (payload) => request('/api/reports/notes', { method: 'POST', body: JSON.stringify(payload) }),

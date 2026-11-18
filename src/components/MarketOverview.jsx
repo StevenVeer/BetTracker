@@ -1,6 +1,79 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { STATUS_LABELS } from '../markets.js';
+import { STATUS_LABELS, MARKET_CATEGORIES } from '../markets.js';
+import InlineIcon from './InlineIcon.jsx';
+
+// Markt (en bij vrije tekst de titel) van één pick handmatig aanpassen.
+function PickEditor({ pick, onSave, onCancel }) {
+  const { edit } = pick;
+  const [category, setCategory] = useState(edit.category);
+  const [title, setTitle] = useState(edit.title);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function save(e) {
+    e.preventDefault();
+    if (edit.titleEditable && !title.trim()) {
+      setError('Vul een titel in');
+      return;
+    }
+    const patch = { partIndex: edit.partIndex, category };
+    if (edit.titleEditable && title.trim() !== edit.title) patch.title = title.trim();
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave(edit.legId, patch);
+    } catch (err) {
+      setError(err.message);
+      setSaving(false);
+    }
+  }
+
+  async function reset() {
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave(edit.legId, { partIndex: edit.partIndex, category: null });
+    } catch (err) {
+      setError(err.message);
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="pick-editor" onSubmit={save}>
+      {edit.titleEditable && (
+        <label className="field">
+          <span>Titel</span>
+          <input value={title} onChange={(e) => { setTitle(e.target.value); setError(null); }} />
+        </label>
+      )}
+      <label className="field">
+        <span>Markt</span>
+        <select value={category} onChange={(e) => setCategory(e.target.value)}>
+          {MARKET_CATEGORIES.map((c) => (
+            <option key={c.key} value={c.key}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {edit.wholeLeg && <p className="hint-text">Geldt voor de hele selectie; die wordt dan niet meer opgesplitst.</p>}
+      {error && <p className="error-text">{error}</p>}
+      <div className="pick-editor-actions">
+        <button type="button" className="btn btn-ghost" onClick={reset} disabled={saving} title="Markt weer automatisch uit de tekst bepalen">
+          Automatisch
+        </button>
+        <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={saving}>
+          Annuleren
+        </button>
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          {saving ? 'Opslaan…' : 'Opslaan'}
+        </button>
+      </div>
+    </form>
+  );
+}
 
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -41,6 +114,15 @@ export default function MarketOverview() {
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState({});
   const [expandedPicks, setExpandedPicks] = useState({});
+  const [editingPick, setEditingPick] = useState(null);
+
+  // Het endpoint geeft meteen het nieuwe overzicht terug; open rijen blijven
+  // open (de pick kan naar een andere rij zijn verhuisd).
+  async function savePick(legId, patch) {
+    const next = await api.updateLegCategory(legId, patch);
+    setData(next);
+    setEditingPick(null);
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -160,7 +242,8 @@ export default function MarketOverview() {
                               <div className="market-picks">
                                 <div className="leg-list">
                                   {s.picks.map((pick) => (
-                                    <div className="leg-row" key={pick.legId}>
+                                    <div key={pick.legId}>
+                                    <div className="leg-row">
                                       <div className="leg-info">
                                         <span className="leg-match">{pick.label}</span>
                                         {pick.pick && <span className="muted">{pick.pick}</span>}
@@ -173,6 +256,21 @@ export default function MarketOverview() {
                                         {pick.odds === null ? '—' : `@ ${pick.odds.toFixed(2)}`}
                                       </span>
                                       <span className={`leg-status leg-status-${pick.status}`}>{STATUS_LABELS[pick.status]}</span>
+                                      {pick.edit && (
+                                        <button
+                                          type="button"
+                                          className="pick-edit-btn"
+                                          aria-label="Markt aanpassen"
+                                          title="Markt aanpassen"
+                                          onClick={() => setEditingPick((cur) => (cur === pick.legId ? null : pick.legId))}
+                                        >
+                                          <InlineIcon name="edit" size={14} />
+                                        </button>
+                                      )}
+                                    </div>
+                                    {editingPick === pick.legId && (
+                                      <PickEditor pick={pick} onSave={savePick} onCancel={() => setEditingPick(null)} />
+                                    )}
                                     </div>
                                   ))}
                                 </div>

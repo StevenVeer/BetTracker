@@ -2581,6 +2581,51 @@ body {
 .market-picks .leg-list {
   max-width: 680px;
 }
+.pick-edit-btn {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid rgba(244, 242, 232, 0.15);
+  border-radius: 7px;
+  color: rgba(244, 242, 232, 0.55);
+  cursor: pointer;
+}
+.pick-edit-btn:hover {
+  color: var(--gold);
+  border-color: rgba(232, 178, 61, 0.55);
+}
+/* Inline editor onder een pick in het marktoverzicht. */
+.pick-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 10px 12px 12px;
+  background: rgba(10, 18, 16, 0.65);
+  border-top: 1px dashed rgba(244, 242, 232, 0.1);
+}
+.pick-editor .field {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.pick-editor .field input,
+.pick-editor .field select {
+  width: 100%;
+  box-sizing: border-box;
+}
+.pick-editor .hint-text,
+.pick-editor .error-text {
+  flex-basis: 100%;
+  margin: 0;
+}
+.pick-editor-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
 .table-note {
   margin: 16px 4px 0;
   font-family: 'Space Mono', ui-monospace, SFMono-Regular, monospace;
@@ -3376,9 +3421,15 @@ body {
 }
 .import-leg {
   display: grid;
-  grid-template-columns: 1fr 1fr 2.6fr 80px auto 38px;
+  grid-template-columns: 1fr 1fr 2.6fr 1.3fr 80px auto 38px;
   gap: 8px;
   margin-top: 6px;
+}
+.import-leg select,
+.import-leg-part select {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 .import-leg input {
   min-width: 0;
@@ -3405,7 +3456,7 @@ body {
 }
 .import-leg-part {
   display: grid;
-  grid-template-columns: 1.4fr 1fr auto;
+  grid-template-columns: 1.4fr 1fr 1fr auto;
   gap: 8px;
 }
 .import-leg-part input {
