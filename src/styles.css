@@ -2386,6 +2386,49 @@ body {
 .ledger-table tr:last-child td {
   border-bottom: none;
 }
+/* Dagdetail: rij uitklappen tot het bonnetje van de bet */
+.day-bet-row {
+  cursor: pointer;
+}
+.day-bet-row:hover td,
+.day-bet-row.is-open td {
+  background: rgba(232, 178, 61, 0.05);
+}
+.day-bet-row:focus-visible {
+  outline: 1px solid var(--gold);
+  outline-offset: -1px;
+}
+.day-bet-row.is-open td {
+  border-bottom: none;
+}
+.day-bet-caret {
+  display: inline-block;
+  width: 14px;
+  margin-right: 6px;
+  color: var(--gold);
+  transition: transform 0.15s ease;
+}
+.day-bet-row.is-open .day-bet-caret {
+  transform: rotate(90deg);
+}
+.ledger-table .day-bet-detail td {
+  padding: 2px 14px 14px 34px;
+  background: rgba(232, 178, 61, 0.05);
+  white-space: normal;
+  font-family: 'Oswald', sans-serif;
+}
+.day-slip-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-bottom: 10px;
+  font-family: 'Space Mono', ui-monospace, SFMono-Regular, monospace;
+  font-size: 12.5px;
+  color: rgba(244, 242, 232, 0.6);
+}
+.day-slip .leg-list {
+  margin-bottom: 0;
+}
 .amount-positive {
   color: var(--win-text);
 }
@@ -2767,7 +2810,7 @@ body {
 }
 .equity-bars {
   width: 100%;
-  height: 70px;
+  height: 140px;
   display: block;
   margin-top: 8px;
 }

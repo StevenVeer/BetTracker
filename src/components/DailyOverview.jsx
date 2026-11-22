@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { betWinst, groupByDay, todayKey } from '../dailyResults.js';
-import { legLabel } from './BetList.jsx';
-import { STATUS_LABELS } from '../markets.js';
+import { LegRow, PayoutCell, legLabel } from './BetList.jsx';
+import { STATUS_LABELS, isBetBuilder } from '../markets.js';
 import EquityCurve from './EquityCurve.jsx';
 import { Amount } from './AmountsToggle.jsx';
 import InlineIcon from './InlineIcon.jsx';
@@ -33,7 +33,53 @@ function resultClass(n) {
   return '';
 }
 
+function placedTime(bet) {
+  return new Date(bet.placedAt).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+}
+
+// "2 van 3 goed" voor een combi - alleen zodra elke (niet-void) selectie
+// een uitslag heeft; een handmatig afgerekende bet heeft soms nog open legs.
+function legsSummary(bet) {
+  if (bet.legs.length < 2) return null;
+  const counted = bet.legs.filter((l) => l.status !== 'void');
+  if (counted.length === 0 || counted.some((l) => l.status === 'open')) return null;
+  const won = counted.filter((l) => l.status === 'won').length;
+  return `${won} van ${counted.length} selecties goed`;
+}
+
+// Het bonnetje onder een uitgeklapte rij: wanneer geplaatst, totale odds,
+// (mogelijke) uitbetaling en elke selectie met odds en uitslag.
+function BetSlip({ bet }) {
+  const isCombi = bet.legs.length > 1;
+  const builderCard = !isCombi && isBetBuilder(bet.legs[0]);
+  const summary = legsSummary(bet);
+  return (
+    <div className="day-slip">
+      <div className="day-slip-meta">
+        <span>Geplaatst {placedTime(bet)}</span>
+        {isCombi && <span>Totaal @ {Number(bet.odds).toFixed(2)}</span>}
+        <PayoutCell bet={bet} />
+        {summary && <span className={bet.status === 'lost' ? 'amount-negative' : ''}>{summary}</span>}
+      </div>
+      <div className="leg-list">
+        {bet.legs.map((leg) => (
+          <LegRow key={leg.id} leg={leg} builderCard={builderCard} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DayDetail({ day, onBack }) {
+  const [openIds, setOpenIds] = useState(() => new Set());
+  const toggle = (id) =>
+    setOpenIds((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   return (
     <div className="bookmaker-ledger">
       <div className="card-header">
@@ -60,9 +106,25 @@ function DayDetail({ day, onBack }) {
           <tbody>
             {day.bets.map((bet) => {
               const winst = betWinst(bet);
+              const open = openIds.has(bet.id);
               return (
-                <tr key={bet.id}>
-                  <td>{betLabel(bet)}</td>
+                <Fragment key={bet.id}>
+                <tr
+                  className={`day-bet-row${open ? ' is-open' : ''}`}
+                  onClick={() => toggle(bet.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggle(bet.id);
+                    }
+                  }}
+                  tabIndex={0}
+                  aria-expanded={open}
+                >
+                  <td>
+                    <span className="day-bet-caret" aria-hidden="true">▸</span>
+                    {betLabel(bet)}
+                  </td>
                   <td>{bet.bookmaker}</td>
                   <td>
                     € <Amount>{fmt(bet.stake)}</Amount>
@@ -74,6 +136,14 @@ function DayDetail({ day, onBack }) {
                     {winst > 0 ? <Amount>{`+ € ${fmt(winst)}`}</Amount> : '—'}
                   </td>
                 </tr>
+                {open && (
+                  <tr className="day-bet-detail">
+                    <td colSpan={5}>
+                      <BetSlip bet={bet} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>
@@ -96,7 +166,7 @@ export default function DailyOverview({ bets }) {
 
   return (
     <div className="bookmaker-overview">
-      <EquityCurve bets={bets} />
+      <EquityCurve bets={bets} onSelectDay={setSelectedDate} />
       <div className="bookmaker-hero">
         <h3>Overzicht per dag</h3>
       </div>

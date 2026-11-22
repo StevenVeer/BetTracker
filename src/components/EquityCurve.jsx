@@ -96,23 +96,28 @@ function buildChart(points, w, h, pad) {
 const CHART_W = 1320;
 const CHART_H = 200;
 const CHART_PAD = 14;
-const BARS_H = 70;
+const BARS_H = 140;
 const BARS_PAD = 4;
 
 // Staafjes met het resultaat per periode, op dezelfde x-posities als de
 // punten van de curve. Eigen schaal (grootste uitschieter = volle hoogte);
 // de nullijn ligt zo dat zowel winst- als verliesstaafjes passen.
+// Wortelschaal i.p.v. lineair: anders drukt één grote uitschieter alle
+// gewone dagen (± € 50) plat tot een streepje. Exacte bedragen staan in de
+// tooltip.
+const barScale = (v) => Math.sign(v) * Math.sqrt(Math.abs(v));
+
 function buildBars(points, coords, h) {
-  const results = points.map((p) => p.result);
+  const results = points.map((p) => barScale(p.result));
   const max = Math.max(0, ...results);
   const min = Math.min(0, ...results);
   const range = max - min || 1;
   const scaleY = (v) => h - BARS_PAD - ((v - min) / range) * (h - BARS_PAD * 2);
   const zeroY = scaleY(0);
   const step = coords.length > 1 ? coords[1].x - coords[0].x : CHART_W;
-  const w = Math.max(2, Math.min(28, step * 0.6));
+  const w = Math.max(3, Math.min(44, step * 0.8));
   const items = points.map((p) => {
-    const y = scaleY(p.result);
+    const y = scaleY(barScale(p.result));
     return {
       x: p.x - w / 2,
       y: Math.min(y, zeroY),
@@ -124,9 +129,9 @@ function buildBars(points, coords, h) {
   return { items, zeroY };
 }
 
-export default function EquityCurve({ bets }) {
+export default function EquityCurve({ bets, onSelectDay }) {
   const [granularity, setGranularity] = useState('day');
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
   const [hoverIndex, setHoverIndex] = useState(null);
 
   // Alleen afgeronde bets: een nog-open bet telt in groupByPlacedPeriod als
@@ -151,6 +156,13 @@ export default function EquityCurve({ bets }) {
   const hovered = hoverIndex !== null ? realPoints[hoverIndex] : null;
   const bars = hasData ? buildBars(realPoints, chart.coords, BARS_H) : null;
   const gradientId = 'equityFill';
+  // Alleen in de Dag-weergave hoort elk punt/staafje bij precies één dag;
+  // bij Week/Maand valt er niets eenduidigs te openen.
+  const clickable = granularity === 'day' && typeof onSelectDay === 'function';
+  const pointerStyle = { cursor: clickable ? 'pointer' : 'default' };
+  const selectPoint = (p) => {
+    if (clickable) onSelectDay(p.date);
+  };
 
   return (
     <div className={`equity-card ${collapsed ? 'is-collapsed' : ''}`}>
@@ -214,7 +226,8 @@ export default function EquityCurve({ bets }) {
                     cy={p.y}
                     r="12"
                     fill="transparent"
-                    style={{ cursor: 'pointer' }}
+                    style={pointerStyle}
+                    onClick={() => selectPoint(p)}
                     onMouseEnter={() => setHoverIndex(i)}
                     onMouseLeave={() => setHoverIndex((cur) => (cur === i ? null : cur))}
                   />
@@ -227,8 +240,7 @@ export default function EquityCurve({ bets }) {
                 style={{ left: `${(hovered.x / CHART_W) * 100}%`, top: `${(hovered.y / CHART_H) * 100}%` }}
               >
                 <div className="equity-tooltip-date">{periodLabel(hovered.date, granularity)}</div>
-                <div className={`equity-tooltip-total mono ${hovered.cum >= 0 ? 'amount-positive' : 'amount-negative'}`}>{signed(hovered.cum)}</div>
-                <div className="equity-tooltip-period mono">{signed(hovered.result)} dit venster</div>
+                <div className={`equity-tooltip-total mono ${hovered.result >= 0 ? 'amount-positive' : 'amount-negative'}`}>{signed(hovered.result)}</div>
               </div>
             )}
           </div>
@@ -244,7 +256,8 @@ export default function EquityCurve({ bets }) {
                   rx="2"
                   fill={b.positive ? 'var(--win-text)' : 'var(--loss-text)'}
                   opacity={hoverIndex === null || hoverIndex === i ? 0.85 : 0.35}
-                  style={{ cursor: 'pointer' }}
+                  style={pointerStyle}
+                  onClick={() => selectPoint(realPoints[i])}
                   onMouseEnter={() => setHoverIndex(i)}
                   onMouseLeave={() => setHoverIndex((cur) => (cur === i ? null : cur))}
                 />

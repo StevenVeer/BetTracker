@@ -185,7 +185,7 @@ const PART_MARKS = { won: '✓', lost: '✕', void: '⌀' };
 
 // builderCard: de leg is een hele bet (single bet builder). De kop van de kaart
 // zegt dan al "Bet builder", dus hier de competitie en het aantal selecties.
-function LegRow({ leg, onLiveLinked, builderCard = false }) {
+export function LegRow({ leg, onLiveLinked, builderCard = false }) {
   const builder = isBetBuilder(leg);
   const kickoff = legKickoff(leg) ? formatKickoff(legKickoff(leg)) : null;
   return (
@@ -235,7 +235,7 @@ function cashoutClass(bet) {
 
 // Uitbetaling op de bet-rij. Bij een cash-out blijft de oorspronkelijke
 // mogelijke uitbetaling zichtbaar (doorgestreept) naast het echte bedrag.
-function PayoutCell({ bet }) {
+export function PayoutCell({ bet }) {
   if (bet.status === 'cashed_out' && bet.cashoutAmount != null) {
     return (
       <span className="payout payout-cashed-out">
