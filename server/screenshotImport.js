@@ -77,6 +77,7 @@ const EXTRACT_TOOL = {
 
 const SYSTEM_PROMPT = `Je leest screenshots of de platte tekst van een pagina met weddenschappen bij (Nederlandse) bookmakers en zet ze om naar gestructureerde data.
 - Elke bet slip is één bet; een combi heeft meerdere legs, een single precies één.
+- Een coupon/ticket met meerdere losse singles (elke selectie een eigen inzet en eigen uitbetaling, geen gecombineerde odd) is GEEN combi: registreer elke single als een aparte bet met één leg, eigen inzet, eigen odds en eigen payout. Ze mogen hetzelfde couponId hebben.
 - Verzin niets: als een waarde niet zichtbaar is, geef je null. Gok geen bookmaker.
 - Staat dezelfde bet op meerdere screenshots (overlap), registreer hem dan één keer.
 - Paginatekst bevat ook menu's, promoties, wedstrijdaanbod en odds die niet gespeeld zijn: registreer alleen geplaatste bets (met een inzet), geen losse odds uit het aanbod of een lege betslip.
@@ -136,6 +137,40 @@ ${text.slice(0, MAX_PAGE_TEXT)}
   return runExtraction(content);
 }
 
+const round2 = (n) => Math.round(n * 100) / 100;
+
+// Vangnet: het model herkent een coupon met meerdere losse singles soms wel
+// (zegt het zelfs in note) maar levert hem toch als één bet met meerdere legs.
+// Een echte combi heeft als totale odds (minstens) het product van de legs; ligt
+// dat product duidelijk boven de totale odds en wijst iets anders ook op
+// singles, dan splitsen we hem in één bet per leg met een gelijk deel van de inzet.
+function splitMultipleSingles(bet) {
+  const legs = Array.isArray(bet?.legs) ? bet.legs : [];
+  const total = Number(bet?.odds);
+  const stake = Number(bet?.stake);
+  if (legs.length < 2 || !(total > 1) || !(stake > 0)) return [bet];
+  const legOdds = legs.map((leg) => Number(leg?.odds));
+  if (legOdds.some((o) => !(o > 1))) return [bet];
+  const product = legOdds.reduce((a, b) => a * b, 1);
+  if (product <= total * 1.05) return [bet];
+
+  const legStake = round2(stake / legs.length);
+  const payout = Number(bet.payout);
+  const noteSaysSingles = /single/i.test(String(bet.note || ''));
+  const payoutMatchesSplit = payout > 0 && Math.abs(legOdds.reduce((sum, o) => sum + legStake * o, 0) - payout) < 0.05 * legs.length;
+  const totalIsLegOdd = legOdds.some((o) => Math.abs(o - total) < 0.015);
+  if (!noteSaysSingles && !payoutMatchesSplit && !totalIsLegOdd) return [bet];
+
+  return legs.map((leg, i) => ({
+    ...bet,
+    stake: legStake,
+    odds: legOdds[i],
+    payout: bet.status === 'open' ? round2(legStake * legOdds[i]) : null,
+    note: `Single ${i + 1}/${legs.length} van één coupon (automatisch gesplitst)`,
+    legs: [leg],
+  }));
+}
+
 async function runExtraction(content) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw Object.assign(new Error('ANTHROPIC_API_KEY ontbreekt op de server'), { status: 503 });
@@ -170,6 +205,7 @@ async function runExtraction(content) {
     }
   }
   if (bets && !Array.isArray(bets) && Array.isArray(bets.bets)) bets = bets.bets;
+  bets = (Array.isArray(bets) ? bets : []).flatMap(splitMultipleSingles);
   // "Vroege uitbetaling" uit de tekst halen en als vlag op de leg zetten, zodat
   // de preview in de importmodal al de EP-markering toont.
   const cleaned = (Array.isArray(bets) ? bets : []).map((bet) => ({
